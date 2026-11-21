@@ -19,6 +19,18 @@
 	<true/>
 	<key>com.apple.vm.networking</key>
 	<true/>
+	<!-- 自带 Hypervisor.framework 直接向内核申请虚拟化能力（VMOI 同款）。 -->
+	<key>com.apple.private.hypervisor</key>
+	<true/>
+	<!-- 画面通过 IOSurface 在 host 与 VMM 之间传递，需要发送权限。 -->
+	<key>com.apple.private.IOSurface.wiredSendRights</key>
+	<true/>
+	<key>com.apple.security.exception.iokit-user-client-class</key>
+	<array>
+		<string>IOSurfaceRootUserClient</string>
+	</array>
+	<key>com.apple.private.security.no-sandbox</key>
+	<true/>
 	<!-- 加载 ad-hoc 签名的第三方二进制（Hypervisor / Virtualization 之外的自带组件）。 -->
 	<key>com.apple.private.amfi.can-execute-cdhash</key>
 	<true/>

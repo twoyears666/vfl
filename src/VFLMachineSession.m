@@ -204,7 +204,9 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 
 - (BOOL)startWithError:(NSError **)error {
 	NSString *diagnostic = nil;
+	NSLog(@"[VFL] 启动 %@：准备 VZ 运行时", self.definition.name);
 	if (!VFLVirtualizationPrepare(&diagnostic)) {
+		NSLog(@"[VFL] VZ 运行时就绪失败：%@", diagnostic);
 		if (error != NULL) {
 			*error = [NSError errorWithDomain:@"vfl" code:10
 									userInfo:@{ NSLocalizedDescriptionKey: diagnostic ?: @"Virtualization 不可用" }];
@@ -384,6 +386,7 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 
 	NSError *validationError = nil;
 	if (![configuration validateWithError:&validationError]) {
+		NSLog(@"[VFL] 配置校验失败：%@", validationError);
 		[self closeConsolePipes];
 		[self setState:VFLMachineStateError message:validationError.localizedDescription ?: @"配置校验失败"];
 		if (error != NULL) {
@@ -399,17 +402,31 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 	[self startStatePolling];
 
 	__weak typeof(self) weakSelf = self;
-	[_machine startWithCompletionHandler:^(NSError *startError) {
-		typeof(self) strongSelf = weakSelf;
-		if (strongSelf == nil) {
-			return;
+	NSLog(@"[VFL] 开始启动（%@ 模式）", definition.bootMode == VFLBootModeEFI ? @"EFI" : @"内核");
+	@try {
+		[_machine startWithCompletionHandler:^(NSError *startError) {
+			typeof(self) strongSelf = weakSelf;
+			if (strongSelf == nil) {
+				return;
+			}
+			if (startError != nil) {
+				NSLog(@"[VFL] 启动失败：%@", startError);
+				[strongSelf setState:VFLMachineStateError
+							 message:startError.localizedDescription ?: @"启动失败"];
+				return;
+			}
+			[strongSelf setState:VFLMachineStateRunning message:@"客户机运行中"];
+		}];
+	} @catch (NSException *exception) {
+		NSLog(@"[VFL] 启动异常：%@", exception);
+		[self closeConsolePipes];
+		[self setState:VFLMachineStateError message:exception.reason ?: @"启动异常"];
+		if (error != NULL) {
+			*error = [NSError errorWithDomain:@"vfl" code:11
+									userInfo:@{ NSLocalizedDescriptionKey: exception.reason ?: @"启动异常" }];
 		}
-		if (startError != nil) {
-			[strongSelf setState:VFLMachineStateError message:startError.localizedDescription ?: @"启动失败"];
-			return;
-		}
-		[strongSelf setState:VFLMachineStateRunning message:@"客户机运行中"];
-	}];
+		return NO;
+	}
 	return YES;
 }
 

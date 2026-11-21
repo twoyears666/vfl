@@ -11,9 +11,18 @@
 
 @implementation VFLAppDelegate
 
+/// 未捕获的 Objective-C 异常先落到 app.log，闪退后至少能看到原因。
+static void VFLHandleUncaughtException(NSException *exception) {
+	fprintf(stderr, "[VFL] 未捕获异常：%s\n%s\n",
+			exception.reason.UTF8String ?: "",
+			exception.callStackSymbols.description.UTF8String ?: "");
+	fflush(stderr);
+}
+
 - (BOOL)application:(UIApplication *)application
 	didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
 	[self redirectLogToFile];
+	NSSetUncaughtExceptionHandler(VFLHandleUncaughtException);
 	// 先抢 socket：GUI 要拿到 VZVirtualMachine 才能显示画面。
 	[[VFLHostService shared] start];
 

@@ -8,6 +8,8 @@
 #import <objc/runtime.h>
 #import <stdlib.h>
 
+#import "VFLVMDefinition.h"
+
 static NSString *const VFLVirtualizationRequiredClasses[] = {
 	@"VZVirtualMachineConfiguration",
 	@"VZLinuxBootLoader",
@@ -107,6 +109,16 @@ BOOL VFLVirtualizationPrepare(NSString **diagnostic) {
 			@"Installation.xpc/Contents/MacOS/com.apple.Virtualization.Installation"];
 		if ([NSFileManager.defaultManager fileExistsAtPath:installationBinary]) {
 			setenv("VZ_INSTALLATION_BIN", installationBinary.fileSystemRepresentation, 1);
+		}
+		// VMOI 用这几个环境变量绕开 VMM 工厂初始化竞态，并把子进程日志留在设备上。
+		setenv("VMM_FACTORY_SETTLE_USEC", "100000", 1);
+		setenv("VZ_DEBUG_LOGGING", "1", 1);
+		NSString *vmmStderr = [VFLDataDirectory() stringByAppendingPathComponent:@"vmm.stderr.log"];
+		setenv("VZ_VMM_STDERR_LOG", vmmStderr.fileSystemRepresentation, 1);
+		NSString *booter = [bundlePath stringByAppendingPathComponent:
+			@"Frameworks/Virtualization.framework/Resources/AVPBooter.vmapple2.bin"];
+		if ([NSFileManager.defaultManager fileExistsAtPath:booter]) {
+			setenv("VZ_AVP_BOOTER", booter.fileSystemRepresentation, 1);
 		}
 
 		void *hook = NULL;

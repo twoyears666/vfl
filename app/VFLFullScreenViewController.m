@@ -249,7 +249,14 @@
 	if (machine == nil) {
 		return;
 	}
-	VFLDisplayView *display = [[VFLDisplayView alloc] initWithMachine:machine];
+	VFLDisplayView *display = nil;
+	@try {
+		display = [[VFLDisplayView alloc] initWithMachine:machine];
+	} @catch (NSException *exception) {
+		// 私有 _VZFramebufferView 在部分系统上会抛异常，退回串口控制台。
+		NSLog(@"[VFL] 创建画面失败，继续用串口：%@", exception);
+		return;
+	}
 	if (!display.available) {
 		return;
 	}
