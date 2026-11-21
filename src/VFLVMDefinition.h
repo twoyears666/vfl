@@ -43,8 +43,8 @@ typedef NS_ENUM(NSInteger, VFLBootMode) {
 @property (nonatomic, copy) NSString *macAddress;
 /// 显示设备数量。iPadOS 上 VZ 不提供画面视图，这个值只影响客户机配置。
 @property (nonatomic, assign) NSUInteger displayCount;
-/// 成功启动的次数。第二轮启动起 GUI 会问是否删除安装镜像。
-@property (nonatomic, assign) NSUInteger bootCount;
+/// 是否还没完成首次启动。首次成功启动后置 NO，GUI 从第二次启动起询问删除安装镜像。
+@property (nonatomic, assign) BOOL firstBoot;
 /// 默认 EFI：安装镜像能自行引导，装完删镜像后仍能从系统盘启动。
 @property (nonatomic, assign) VFLBootMode bootMode;
 /// EFI NVRAM 文件路径（按虚拟机名派生，跨启动保留引导项）。

@@ -47,6 +47,14 @@ NSString *VFLSocketPath(void) {
 
 @implementation VFLVMDefinition
 
+- (instancetype)init {
+	self = [super init];
+	if (self) {
+		_firstBoot = YES;
+	}
+	return self;
+}
+
 + (instancetype)definitionWithDictionary:(NSDictionary *)dictionary {
 	VFLVMDefinition *definition = [[VFLVMDefinition alloc] init];
 	definition.name = dictionary[@"name"] ?: @"linux";
@@ -61,7 +69,8 @@ NSString *VFLSocketPath(void) {
 	definition.networkEnabled = [dictionary[@"network"] boolValue];
 	definition.macAddress = dictionary[@"mac"] ?: @"";
 	definition.displayCount = [dictionary[@"displays"] unsignedIntegerValue] ?: 1;
-	definition.bootCount = [dictionary[@"bootCount"] unsignedIntegerValue];
+	definition.firstBoot = dictionary[@"firstBoot"] == nil
+		? YES : [dictionary[@"firstBoot"] boolValue];
 	// 旧定义没有 bootMode，按内核直启处理，避免升级后老虚拟机突然走 EFI。
 	definition.bootMode = [dictionary[@"bootMode"] isEqualToString:@"efi"]
 		? VFLBootModeEFI : VFLBootModeKernel;
@@ -82,7 +91,7 @@ NSString *VFLSocketPath(void) {
 		@"network": @(self.networkEnabled),
 		@"mac": self.macAddress,
 		@"displays": @(self.displayCount),
-		@"bootCount": @(self.bootCount),
+		@"firstBoot": @(self.firstBoot),
 		@"bootMode": self.bootMode == VFLBootModeKernel ? @"kernel" : @"efi",
 	};
 }

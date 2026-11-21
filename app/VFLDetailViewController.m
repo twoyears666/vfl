@@ -595,10 +595,10 @@
 		return;
 	}
 
-	// 启动前重新读定义：bootCount 由服务端在成功启动后累加。
+	// 启动前重新读定义：firstBoot 由服务端在成功启动后置 NO。
 	VFLVMDefinition *latest = [[[VFLVMStore alloc] init] definitionNamed:self.vmName] ?: self.definition;
 	NSInteger installImageIndex = [self installImageIndexInDefinition:latest];
-	if (installImageIndex >= 0 && latest.bootCount >= 1 && latest.bootMode == VFLBootModeEFI) {
+	if (installImageIndex >= 0 && !latest.firstBoot && latest.bootMode == VFLBootModeEFI) {
 		[self confirmRemovingInstallImageAtIndex:installImageIndex definition:latest];
 		return;
 	}
@@ -632,8 +632,8 @@
 	}
 	NSString *path = definition.diskPaths[(NSUInteger)index];
 	NSString *message = [NSString stringWithFormat:
-		@"这台虚拟机已经启动过 %lu 次。安装完成后不再需要安装镜像，要删除它吗？\n\n%@\n\n删除后无法恢复；选择「保留」则每次启动都会再问一次。",
-		(unsigned long)definition.bootCount, path.lastPathComponent];
+		@"这台虚拟机已经完成首次启动。若系统已安装好，安装镜像就不再需要了，要删除它吗？\n\n%@\n\n删除后无法恢复；选择「保留」则每次启动都会再问一次。",
+		path.lastPathComponent];
 	UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"安装已完成？"
 																  message:message
 														   preferredStyle:UIAlertControllerStyleAlert];

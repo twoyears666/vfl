@@ -250,11 +250,11 @@
 				[connection sendJSON:@{ @"ok": @NO, @"error": error.localizedDescription ?: @"启动失败" }];
 				return;
 			}
-			// 成功启动才累加，GUI 用这个次数判断是否该问「删掉安装镜像」。
+			// 首次成功启动后就不再是首次，GUI 从下一次启动起询问是否删镜像。
 			VFLVMStore *store = [[VFLVMStore alloc] init];
 			VFLVMDefinition *definition = [store definitionNamed:name];
 			if (definition != nil) {
-				definition.bootCount += 1;
+				definition.firstBoot = NO;
 				[store saveDefinition:definition error:NULL];
 			}
 			[connection sendJSON:@{ @"ok": @YES, @"state": VFLMachineStateText(session.state) }];
