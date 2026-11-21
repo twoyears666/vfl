@@ -61,7 +61,7 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 		_stateTimer = nil;
 	}
 	[self closeConsolePipes];
-	[_machine stopWithCompletionHandler:^(NSError *error) {}];
+	// 不在这里碰 VZ：dealloc 可能发生在任意队列，而 VZ 只接受主队列调用。
 }
 
 #pragma mark - 只读属性
@@ -422,34 +422,53 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 	}
 
 	// 私有框架不能静态链接，必须运行时取类，否则 ld 找不到 _OBJC_CLASS_$_VZVirtualMachine。
-	_machine = [(VZVirtualMachine *)VFLAlloc(@"VZVirtualMachine")
-				initWithConfiguration:configuration];
 	[self startConsoleReaderWithDescriptor:guestToHost[0]];
-	[self startStatePolling];
 
+	// VZ 规定所有调用都必须在虚拟机创建时所在的队列上（默认主队列）。
+	// 之前在 dispatch 全局队列里调 start，Virtualization 内部的
+	// dispatch_assert_queue 直接抛 SIGTRAP——这就是“到 EFI 就没日志”的原因。
 	__weak typeof(self) weakSelf = self;
-	NSLog(@"[VFL] 开始启动（%@ 模式）", definition.bootMode == VFLBootModeEFI ? @"EFI" : @"内核");
-	@try {
-		[_machine startWithCompletionHandler:^(NSError *startError) {
-			typeof(self) strongSelf = weakSelf;
-			if (strongSelf == nil) {
-				return;
-			}
-			if (startError != nil) {
-				NSLog(@"[VFL] 启动失败：%@", startError);
-				[strongSelf setState:VFLMachineStateError
-							 message:startError.localizedDescription ?: @"启动失败"];
-				return;
-			}
-			[strongSelf setState:VFLMachineStateRunning message:@"客户机运行中"];
-		}];
-	} @catch (NSException *exception) {
-		NSLog(@"[VFL] 启动异常：%@", exception);
-		[self closeConsolePipes];
-		[self setState:VFLMachineStateError message:exception.reason ?: @"启动异常"];
+	__block BOOL startFailed = NO;
+	void (^beginStart)(void) = ^{
+		typeof(self) strongSelf = weakSelf;
+		if (strongSelf == nil) {
+			return;
+		}
+		strongSelf->_machine = [(VZVirtualMachine *)VFLAlloc(@"VZVirtualMachine")
+					initWithConfiguration:configuration];
+		[strongSelf startStatePolling];
+		NSLog(@"[VFL] 开始启动（%@ 模式）",
+			  strongSelf.definition.bootMode == VFLBootModeEFI ? @"EFI" : @"内核");
+		@try {
+			[strongSelf->_machine startWithCompletionHandler:^(NSError *startError) {
+				typeof(self) insideSelf = weakSelf;
+				if (insideSelf == nil) {
+					return;
+				}
+				if (startError != nil) {
+					NSLog(@"[VFL] 启动失败：%@", startError);
+					[insideSelf setState:VFLMachineStateError
+								 message:startError.localizedDescription ?: @"启动失败"];
+					return;
+				}
+				[insideSelf setState:VFLMachineStateRunning message:@"客户机运行中"];
+			}];
+		} @catch (NSException *exception) {
+			NSLog(@"[VFL] 启动异常：%@", exception);
+			startFailed = YES;
+			[strongSelf closeConsolePipes];
+			[strongSelf setState:VFLMachineStateError message:exception.reason ?: @"启动异常"];
+		}
+	};
+	if (NSThread.isMainThread) {
+		beginStart();
+	} else {
+		dispatch_sync(dispatch_get_main_queue(), beginStart);
+	}
+	if (startFailed) {
 		if (error != NULL) {
 			*error = [NSError errorWithDomain:@"vfl" code:11
-									userInfo:@{ NSLocalizedDescriptionKey: exception.reason ?: @"启动异常" }];
+									userInfo:@{ NSLocalizedDescriptionKey: @"启动异常" }];
 		}
 		return NO;
 	}
@@ -469,7 +488,9 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 	if (_stateTimer != nil) {
 		return;
 	}
-	_stateTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, _consoleQueue);
+	// 轮询也在主队列：VZ 的 state getter 同样要求当前队列是虚拟机所在队列。
+	_stateTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
+										 dispatch_get_main_queue());
 	dispatch_source_set_timer(_stateTimer,
 							  dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC),
 							  NSEC_PER_SEC,
@@ -519,10 +540,18 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 		return;
 	}
 	[self setState:VFLMachineStateStopping message:@"正在关机…"];
-	NSError *error = nil;
-	if (![_machine requestStopWithError:&error]) {
-		[self setState:VFLMachineStateRunning message:error.localizedDescription ?: @"关机请求失败"];
-	}
+	__weak typeof(self) weakSelf = self;
+	dispatch_async(dispatch_get_main_queue(), ^{
+		typeof(self) strongSelf = weakSelf;
+		if (strongSelf == nil) {
+			return;
+		}
+		NSError *error = nil;
+		if (![strongSelf->_machine requestStopWithError:&error]) {
+			[strongSelf setState:VFLMachineStateRunning
+						 message:error.localizedDescription ?: @"关机请求失败"];
+		}
+	});
 }
 
 - (void)forceStop {
@@ -531,17 +560,24 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 	}
 	[self setState:VFLMachineStateStopping message:@"强制关机…"];
 	__weak typeof(self) weakSelf = self;
-	[_machine stopWithCompletionHandler:^(NSError *error) {
+	dispatch_async(dispatch_get_main_queue(), ^{
 		typeof(self) strongSelf = weakSelf;
 		if (strongSelf == nil) {
 			return;
 		}
-		if (error != nil) {
-			[strongSelf setState:VFLMachineStateError message:error.localizedDescription ?: @"强制关机失败"];
-			return;
-		}
-		[strongSelf setState:VFLMachineStateStopped message:@"已停止"];
-	}];
+		[strongSelf->_machine stopWithCompletionHandler:^(NSError *error) {
+			typeof(self) insideSelf = weakSelf;
+			if (insideSelf == nil) {
+				return;
+			}
+			if (error != nil) {
+				[insideSelf setState:VFLMachineStateError
+							  message:error.localizedDescription ?: @"强制关机失败"];
+				return;
+			}
+			[insideSelf setState:VFLMachineStateStopped message:@"已停止"];
+		}];
+	});
 }
 
 @end

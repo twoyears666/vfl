@@ -92,6 +92,15 @@ static void VFLRebindVirtualization(void *hookHandle, NSMutableArray<NSString *>
 	}
 }
 
+/// 把 hook 写死的 /tmp 日志改成指向 Media 下的同名文件。
+static void VFLPointLogAtMedia(const char *tmpPath, NSString *destination) {
+	[[NSFileManager defaultManager] createFileAtPath:destination contents:nil attributes:nil];
+	unlink(tmpPath);
+	if (symlink(destination.fileSystemRepresentation, tmpPath) != 0) {
+		NSLog(@"[VFL] 无法把 %s 链接到 %@", tmpPath, destination);
+	}
+}
+
 BOOL VFLVirtualizationPrepare(NSString **diagnostic) {
 	static dispatch_once_t once;
 	static BOOL ready = NO;
@@ -134,9 +143,16 @@ BOOL VFLVirtualizationPrepare(NSString **diagnostic) {
 		if ([NSFileManager.defaultManager fileExistsAtPath:booter]) {
 			setenv("VZ_AVP_BOOTER", booter.fileSystemRepresentation, 1);
 		}
-		// 每次启动都从空日志开始，避免把上一轮的内容当成这次失败的原因。
-		unlink("/tmp/vzxpchook.log");
-		unlink("/tmp/vmmhook.log");
+		// VMOI 的 hook 把日志路径写死成 /tmp；换成符号链接，统一落到 Media/VFL 方便查看。
+		NSString *dataDirectory = VFLDataDirectory();
+		[[NSFileManager defaultManager] createDirectoryAtPath:dataDirectory
+								  withIntermediateDirectories:YES
+												   attributes:nil
+														error:NULL];
+		VFLPointLogAtMedia("/tmp/vzxpchook.log",
+						   [dataDirectory stringByAppendingPathComponent:@"vzxpchook.log"]);
+		VFLPointLogAtMedia("/tmp/vmmhook.log",
+						   [dataDirectory stringByAppendingPathComponent:@"vmmhook.log"]);
 		unlink(vmmStderr.fileSystemRepresentation);
 
 		void *hook = NULL;
