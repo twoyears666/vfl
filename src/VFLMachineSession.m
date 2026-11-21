@@ -299,6 +299,19 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 		}
 		VZEFIBootLoader *efiLoader = [(VZEFIBootLoader *)[efiLoaderClass alloc] init];
 		efiLoader.variableStore = store;
+		// VMM 里 EFI 固件路径写死成 /System/.../Virtualization.framework/.../VZG21.fd，
+		// iPad 上没有这个文件（日志里的 FATAL: Failed to open EFI ROM）。
+		// VZEFIBootLoader 有私有 _ROMImageURL，塞进去后框架会把它当 fd 传给 VMM。
+		NSURL *romURL = VFLVirtualizationEFIROMURL();
+		SEL romSelector = NSSelectorFromString(@"_setROMImageURL:");
+		if (romURL != nil && [efiLoader respondsToSelector:romSelector]) {
+			typedef void (*VFLSetROMFunction)(id, SEL, NSURL *);
+			VFLSetROMFunction setROM = (VFLSetROMFunction)[efiLoader methodForSelector:romSelector];
+			setROM(efiLoader, romSelector, romURL);
+			NSLog(@"[VFL] 使用自带 EFI 固件：%@", romURL.path);
+		} else {
+			NSLog(@"[VFL] 没有可用的自带 EFI 固件，固件大概率会启动失败");
+		}
 		bootLoader = efiLoader;
 	} else {
 		if (![NSFileManager.defaultManager fileExistsAtPath:definition.kernelPath]) {

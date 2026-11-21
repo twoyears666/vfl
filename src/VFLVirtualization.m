@@ -92,13 +92,21 @@ static void VFLRebindVirtualization(void *hookHandle, NSMutableArray<NSString *>
 	}
 }
 
-/// 把 hook 写死的 /tmp 日志改成指向 Media 下的同名文件。
-static void VFLPointLogAtMedia(const char *tmpPath, NSString *destination) {
+/// 把 hook 写死的 /tmp 日志改成指向 Media 下的同名文件。static void VFLPointLogAtMedia(const char *tmpPath, NSString *destination) {
 	[[NSFileManager defaultManager] createFileAtPath:destination contents:nil attributes:nil];
 	unlink(tmpPath);
 	if (symlink(destination.fileSystemRepresentation, tmpPath) != 0) {
 		NSLog(@"[VFL] 无法把 %s 链接到 %@", tmpPath, destination);
 	}
+}
+
+NSURL *VFLVirtualizationEFIROMURL(void) {
+	NSString *path = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:
+		@"Frameworks/Virtualization.framework/Versions/A/Resources/VZG21.fd"];
+	if (![NSFileManager.defaultManager fileExistsAtPath:path]) {
+		return nil;
+	}
+	return [NSURL fileURLWithPath:path];
 }
 
 BOOL VFLVirtualizationPrepare(NSString **diagnostic) {

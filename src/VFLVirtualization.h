@@ -120,4 +120,7 @@ typedef NS_ENUM(NSInteger, VZVirtualMachineState) {
 /// 运行时加载 Virtualization.framework 并确认必需类都在。返回 NO 时 diagnostic 说明缺了什么。
 BOOL VFLVirtualizationPrepare(NSString *_Nullable *_Nullable diagnostic);
 
+/// App 自带的 EFI 固件（VZG21.fd）。VMM 默认去 /System 下找，iPad 上没有，需要显式喂给它。
+NSURL *_Nullable VFLVirtualizationEFIROMURL(void);
+
 NS_ASSUME_NONNULL_END
