@@ -25,6 +25,10 @@ NSString *VFLDisksDirectory(void) {
 	return [VFLDataDirectory() stringByAppendingPathComponent:@"disks"];
 }
 
+NSString *VFLImagesDirectory(void) {
+	return [VFLDataDirectory() stringByAppendingPathComponent:@"images"];
+}
+
 NSString *VFLRunDirectory(void) {
 	return [VFLDataDirectory() stringByAppendingPathComponent:@"run"];
 }

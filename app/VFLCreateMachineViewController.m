@@ -4,11 +4,12 @@
 #import "VFLCreateMachineViewController.h"
 
 #import <math.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #import "VFLDistroIcon.h"
 #import "VFLVMDefinition.h"
 
-@interface VFLCreateMachineViewController ()
+@interface VFLCreateMachineViewController () <UIDocumentPickerDelegate>
 
 @property (nonatomic, copy) NSString *suggestedName;
 @property (nonatomic, copy) NSString *selectedDistro;
@@ -209,7 +210,7 @@
 
 - (UIView *)isoCard {
 	UIButton *importButton = [UIButton buttonWithType:UIButtonTypeSystem];
-	[importButton setTitle:@"输入 ISO 安装镜像路径（可选）" forState:UIControlStateNormal];
+	[importButton setTitle:@"从「文件」导入 ISO 安装镜像" forState:UIControlStateNormal];
 	importButton.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
 	importButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
 	[importButton addTarget:self action:@selector(importIsoTapped) forControlEvents:UIControlEventTouchUpInside];
@@ -282,43 +283,52 @@
 }
 
 - (void)importIsoTapped {
-	UIAlertController *alert =
-		[UIAlertController alertControllerWithTitle:@"ISO 安装镜像"
-											message:@"输入设备上的绝对路径，例如 /var/mobile/Media/debian-12.5.0-arm64-netinst.iso"
-									 preferredStyle:UIAlertControllerStyleAlert];
-	[alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
-		field.placeholder = @"/var/mobile/Media/xxx.iso";
-		field.autocorrectionType = UITextAutocorrectionTypeNo;
-		field.autocapitalizationType = UITextAutocapitalizationTypeNone;
-		field.text = @"/var/mobile/Media/";
-	}];
-	[alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-	__weak typeof(self) weakSelf = self;
-	[alert addAction:[UIAlertAction actionWithTitle:@"使用"
-											  style:UIAlertActionStyleDefault
-											handler:^(UIAlertAction *action) {
-		[weakSelf applyISOPath:alert.textFields.firstObject.text];
-	}]];
-	[self presentViewController:alert animated:YES completion:nil];
+	UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc]
+		initForOpeningContentTypes:@[ UTTypeISO, UTTypeDiskImage ]
+						   asCopy:YES];
+	picker.delegate = self;
+	picker.allowsMultipleSelection = NO;
+	[self presentViewController:picker animated:YES completion:nil];
 }
 
-- (void)applyISOPath:(NSString *)rawPath {
-	NSString *path = [rawPath stringByTrimmingCharactersInSet:
-					  NSCharacterSet.whitespaceAndNewlineCharacterSet];
-	if (path.length == 0) {
+- (void)documentPicker:(UIDocumentPickerViewController *)controller
+	didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+	NSURL *sourceURL = urls.firstObject;
+	if (sourceURL == nil) {
 		return;
 	}
-	NSString *extension = path.pathExtension.lowercaseString;
-	BOOL extensionOK = [extension isEqualToString:@"iso"] || [extension isEqualToString:@"img"];
-	BOOL exists = [NSFileManager.defaultManager fileExistsAtPath:path];
-	if (!exists || !extensionOK) {
-		[self presentMessage:@"路径不对"
-					  detail:exists ? @"这个文件的扩展名不是 .iso 或 .img。"
-									: @"这个路径上没有文件。"];
+
+	NSString *directory = VFLImagesDirectory();
+	[NSFileManager.defaultManager createDirectoryAtPath:directory
+						   withIntermediateDirectories:YES
+											attributes:nil
+												 error:NULL];
+
+	NSString *fileName = sourceURL.lastPathComponent;
+	if (fileName.length == 0) {
+		fileName = @"install.iso";
+	}
+	NSString *destinationPath = [directory stringByAppendingPathComponent:fileName];
+	if ([NSFileManager.defaultManager fileExistsAtPath:destinationPath]) {
+		NSString *base = fileName.stringByDeletingPathExtension;
+		NSString *extension = fileName.pathExtension;
+		NSUInteger suffix = 2;
+		do {
+			destinationPath = [directory stringByAppendingPathComponent:
+				[NSString stringWithFormat:@"%@-%lu.%@", base, (unsigned long)suffix++, extension]];
+		} while ([NSFileManager.defaultManager fileExistsAtPath:destinationPath]);
+	}
+
+	NSError *error = nil;
+	if (![NSFileManager.defaultManager moveItemAtURL:sourceURL
+											  toURL:[NSURL fileURLWithPath:destinationPath]
+											  error:&error]) {
+		[self presentMessage:@"导入镜像失败" detail:error.localizedDescription ?: @"文件拷不进来"];
 		return;
 	}
-	self.isoPath = path;
-	self.isoLabel.text = path;
+
+	self.isoPath = destinationPath;
+	self.isoLabel.text = destinationPath;
 	self.isoLabel.textColor = UIColor.labelColor;
 }
 

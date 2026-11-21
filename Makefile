@@ -18,7 +18,7 @@ VFL_FILES = $(wildcard app/*.m) \
             $(VFL_SHARED_FILES) \
             src/VFLTerminalEmulator.m \
             src/VFLTerminalView.m
-VFL_FRAMEWORKS = UIKit Foundation
+VFL_FRAMEWORKS = UIKit Foundation UniformTypeIdentifiers
 VFL_CFLAGS = -fobjc-arc -Wall -Isrc
 VFL_CODESIGN_FLAGS = -Sentitlements.plist
 VFL_INSTALL_PATH = /Applications

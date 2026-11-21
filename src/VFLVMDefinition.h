@@ -9,6 +9,8 @@ NS_ASSUME_NONNULL_BEGIN
 FOUNDATION_EXPORT NSString *VFLDataDirectory(void);
 FOUNDATION_EXPORT NSString *VFLVirtualMachinesDirectory(void);
 FOUNDATION_EXPORT NSString *VFLDisksDirectory(void);
+/// 导入的安装镜像（ISO）统一放这里，守护进程才读得到。
+FOUNDATION_EXPORT NSString *VFLImagesDirectory(void);
 FOUNDATION_EXPORT NSString *VFLRunDirectory(void);
 FOUNDATION_EXPORT NSString *VFLSocketPath(void);
 
