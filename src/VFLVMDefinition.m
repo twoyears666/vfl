@@ -41,6 +41,18 @@ NSString *VFLSocketPath(void) {
 - (instancetype)init {
 	self = [super init];
 	if (self) {
+		// JSON 字典里不能出现 nil：GUI 建新对象时未必填满所有字段。
+		_name = @"linux";
+		_kernelPath = @"";
+		_initrdPath = @"";
+		_commandLine = @"";
+		_distroIdentifier = @"linux";
+		_macAddress = @"";
+		_diskPaths = @[];
+		_readOnlyDisks = @[];
+		_memoryMB = 2048;
+		_cpuCount = 2;
+		_displayCount = 1;
 		_firstBoot = YES;
 	}
 	return self;
@@ -70,17 +82,17 @@ NSString *VFLSocketPath(void) {
 
 - (NSDictionary *)dictionaryRepresentation {
 	return @{
-		@"name": self.name,
-		@"kernel": self.kernelPath,
-		@"initrd": self.initrdPath,
-		@"disks": self.diskPaths,
-		@"readOnlyDisks": self.readOnlyDisks,
+		@"name": self.name ?: @"linux",
+		@"kernel": self.kernelPath ?: @"",
+		@"initrd": self.initrdPath ?: @"",
+		@"disks": self.diskPaths ?: @[],
+		@"readOnlyDisks": self.readOnlyDisks ?: @[],
 		@"memoryMB": @(self.memoryMB),
 		@"cpuCount": @(self.cpuCount),
-		@"commandLine": self.commandLine,
+		@"commandLine": self.commandLine ?: @"",
 		@"distro": self.distroIdentifier ?: @"linux",
 		@"network": @(self.networkEnabled),
-		@"mac": self.macAddress,
+		@"mac": self.macAddress ?: @"",
 		@"displays": @(self.displayCount),
 		@"firstBoot": @(self.firstBoot),
 		@"bootMode": self.bootMode == VFLBootModeKernel ? @"kernel" : @"efi",
