@@ -1,0 +1,20 @@
+#!/bin/sh
+set -e
+
+# 虚拟机定义、磁盘与 socket 都放在 mobile 家目录下：守护进程、CLI、GUI 三方共用。
+data=/var/jb/var/mobile/Library/VFL
+mkdir -p "$data/vms" "$data/run" "$data/disks"
+chown -R mobile:mobile "$data"
+chmod 755 "$data"
+chmod 775 "$data/vms" "$data/disks"
+
+plist=/var/jb/Library/LaunchDaemons/com.twoyears666.vfl.daemon.plist
+launchctl unload "$plist" >/dev/null 2>&1 || true
+launchctl load -w "$plist" >/dev/null 2>&1 || true
+
+# 让主屏立刻出现图标
+if [ -x /usr/bin/sbreload ]; then
+	/usr/bin/sbreload >/dev/null 2>&1 || true
+fi
+
+echo "finish:restart"

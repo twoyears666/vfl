@@ -1,0 +1,12 @@
+Package: com.twoyears666.vfl
+Name: VFL
+Version: 0.1.0
+Architecture: iphoneos-arm64
+Description: Linux virtual machines on jailbroken iPadOS through Apple's
+ Virtualization.framework, with a GUI app and a vfl command line tool.
+Maintainer: twoyears666
+Author: twoyears666
+Section: Utilities
+Priority: optional
+Depends: firmware (>= 16.0)
+Tag: role::enduser

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>platform-application</key>
+	<true/>
+	<key>com.apple.private.security.no-container</key>
+	<true/>
+	<key>com.apple.private.security.storage.AppDataContainers</key>
+	<true/>
+	<!-- Virtualization.framework 的唯一门槛：没有它，VZVirtualMachineConfiguration
+	     在 validate 阶段直接报 "doesn't have the entitlement"。 -->
+	<key>com.apple.security.virtualization</key>
+	<true/>
+	<!-- 加载 ad-hoc 签名的第三方二进制（Hypervisor / Virtualization 之外的自带组件）。 -->
+	<key>com.apple.private.amfi.can-execute-cdhash</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<key>com.apple.private.memorystatus</key>
+	<true/>
+	<key>get-task-allow</key>
+	<true/>
+</dict>
+</plist>

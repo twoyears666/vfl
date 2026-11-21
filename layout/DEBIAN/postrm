@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+plist=/var/jb/Library/LaunchDaemons/com.twoyears666.vfl.daemon.plist
+launchctl unload "$plist" >/dev/null 2>&1 || true
+
+# 用户数据（磁盘镜像）保留，只清运行时 socket。
+rm -rf /var/jb/var/mobile/Library/VFL/run
+
+echo "finish:restart"

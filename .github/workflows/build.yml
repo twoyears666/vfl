@@ -1,0 +1,117 @@
+name: Build VFL DEB
+
+on:
+  push:
+    branches: [main, dev, "feat/**", "fix/**"]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # === 规范检查 —— 先看元数据与维护脚本，别等编译完才发现包不对 ===
+  lint:
+    name: 规范检查
+    # macos-14 会被解析成 arm64 配置，公共仓库没有权限会秒取消；
+    # macos-13 已退役，所以固定 Intel 镜像。
+    runs-on: macos-15-intel
+    steps:
+      - name: 检出仓库源码
+        uses: actions/checkout@v4
+
+      - name: 安装 ldid 与 dpkg
+        run: brew install ldid dpkg
+
+      - name: 校验打包元数据
+        run: |
+          set -euo pipefail
+          grep -q '^Architecture: iphoneos-arm64$' control
+          grep -q 'firmware (>= 16.0)' control
+          plutil -lint Resources/Info.plist entitlements.plist \
+            layout/Library/LaunchDaemons/com.twoyears666.vfl.daemon.plist
+          test "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' Resources/Info.plist)" = "16.0"
+          # Virtualization.framework 的唯一门槛，少了它虚拟机根本建不起来
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.security.virtualization' entitlements.plist | grep -qx true
+          test -x layout/DEBIAN/postinst
+          test -x layout/DEBIAN/postrm
+          grep -q 'finish:restart' layout/DEBIAN/postinst
+
+  # === 编译打包 —— 产出 iphoneos-arm64 rootless deb ===
+  build:
+    name: 编译打包
+    needs: lint
+    runs-on: macos-15-intel
+    env:
+      THEOS: ${{ github.workspace }}/.theos-src
+    steps:
+      - name: 检出仓库源码
+        uses: actions/checkout@v4
+
+      - name: 安装 ldid 与 dpkg
+        run: brew install ldid dpkg
+
+      - name: 克隆并配置 Theos
+        run: |
+          git clone --recursive --depth=1 https://github.com/theos/theos.git "$THEOS"
+          echo "$THEOS/bin" >> "$GITHUB_PATH"
+
+      - name: 编译并打包 rootless deb
+        run: make package FINALPACKAGE=1
+
+      - name: 校验 deb 架构与包内路径
+        run: |
+          set -euo pipefail
+          deb="$(ls packages/*.deb | head -1)"
+          echo "产物：$deb"
+          dpkg-deb -f "$deb" Architecture | grep -qx iphoneos-arm64
+          dpkg-deb -f "$deb" Version
+          listing="$(dpkg-deb -c "$deb")"
+          echo "$listing"
+          grep -q 'var/jb/Applications/VFL.app/VFL' <<<"$listing"
+          grep -q 'var/jb/Applications/VFL.app/Info.plist' <<<"$listing"
+          grep -q 'var/jb/usr/bin/vfl' <<<"$listing"
+          grep -q 'var/jb/Library/LaunchDaemons/com.twoyears666.vfl.daemon.plist' <<<"$listing"
+          rm -rf /tmp/deb-control
+          dpkg-deb -e "$deb" /tmp/deb-control
+          test -x /tmp/deb-control/postinst
+          grep -q 'finish:restart' /tmp/deb-control/postinst
+          # 两个二进制都必须带虚拟化权限，否则 VZ 建配置时就抛错
+          rm -rf /tmp/vfl-check
+          dpkg-deb -R "$deb" /tmp/vfl-check
+          ldid -e /tmp/vfl-check/var/jb/Applications/VFL.app/VFL | grep -q com.apple.security.virtualization
+          ldid -e /tmp/vfl-check/var/jb/usr/bin/vfl | grep -q com.apple.security.virtualization
+
+      - name: 上传 deb 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: VFL-DEB
+          path: packages/*.deb
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 汇总编译错误（失败时）
+        if: failure()
+        run: |
+          echo "编译或打包失败，检查上方各步骤输出。"
+          if compgen -G "packages/*.deb" > /dev/null; then
+            ls -l packages
+          else
+            echo "未生成任何 deb。"
+          fi
+
+      - name: 上传编译日志（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: |
+            .theos/
+            packages/
+          if-no-files-found: warn
+          retention-days: 7
