@@ -13,14 +13,18 @@ VFL_SHARED_FILES = src/VFLVirtualization.m \
 
 # === GUI —— 列表 / 配置 / 串口控制台 ===
 # 终端视图依赖 UIKit，只进 App；vfl 命令行只链 Foundation。
+# VFLServer 也编进 App：VZ 的画面视图必须与 VZVirtualMachine 同进程。
 APPLICATION_NAME = VFL
 VFL_FILES = $(wildcard app/*.m) \
             $(VFL_SHARED_FILES) \
+            src/VFLServer.m \
             src/VFLTerminalEmulator.m \
             src/VFLTerminalView.m
 VFL_FRAMEWORKS = UIKit Foundation UniformTypeIdentifiers
 VFL_CFLAGS = -fobjc-arc -Wall -Isrc
 VFL_CODESIGN_FLAGS = -Sentitlements.plist
+# 自带 VZ 框架由 tools/build-vz-frameworks.sh 在本机生成，不入库。
+VFL_RESOURCE_DIRS = Resources $(wildcard vendor/app)
 VFL_INSTALL_PATH = /Applications
 include $(THEOS_MAKE_PATH)/application.mk
 

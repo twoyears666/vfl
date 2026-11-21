@@ -85,6 +85,10 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 		|| state == VFLMachineStateStopping;
 }
 
+- (id)virtualMachine {
+	return _machine;
+}
+
 #pragma mark - 观察者
 
 - (void)addObserver:(id<VFLSessionObserver>)observer {

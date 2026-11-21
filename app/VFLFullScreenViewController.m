@@ -7,6 +7,8 @@
 
 #import "VFLClient.h"
 #import "VFLControlBar.h"
+#import "VFLDisplayView.h"
+#import "VFLHostService.h"
 #import "VFLKeyInputView.h"
 #import "VFLTerminalEmulator.h"
 #import "VFLTerminalView.h"
@@ -25,6 +27,11 @@
 @property (nonatomic, strong) VFLControlBar *controlBar;
 @property (nonatomic, strong) UILabel *hudLabel;
 @property (nonatomic, strong) UIView *hudContainer;
+
+/// App 内托管时才有画面；daemon 模式下为 nil，界面保持串口控制台。
+@property (nonatomic, strong, nullable) VFLDisplayView *displayView;
+@property (nonatomic, assign) BOOL displayActive;
+@property (nonatomic, assign) NSUInteger displayAttempts;
 
 @property (nonatomic, copy) NSString *state;
 @property (nonatomic, assign) BOOL connected;
@@ -127,6 +134,8 @@
 
 - (void)viewDidAppear:(BOOL)animated {
 	[super viewDidAppear:animated];
+	[self prepareDisplayIfPossible];
+	[self scheduleDisplayPreparation];
 	[self.keyInputView focus];
 	[self.terminalView becomeFirstResponder];
 }
@@ -134,6 +143,7 @@
 - (void)viewWillDisappear:(BOOL)animated {
 	[super viewWillDisappear:animated];
 	[self restoreBarsIfNeeded];
+	[self tearDownDisplay];
 	[self.client detach];
 	[self.client close];
 	self.client = nil;
@@ -219,9 +229,77 @@
 		NSString *message = event[@"message"];
 		dispatch_async(dispatch_get_main_queue(), ^{
 			self.state = state;
+			if ([state isEqualToString:@"running"]) {
+				[self prepareDisplayIfPossible];
+			}
 			[self updateHUD:message];
 		});
 	}
+}
+
+#pragma mark - 画面
+
+/// App 内托管时才有 VZVirtualMachine；拿到 framebuffer 就把终端让位给画面。
+- (void)prepareDisplayIfPossible {
+	if (self.displayView != nil) {
+		return;
+	}
+	VFLMachineSession *session = [[VFLHostService shared] sessionNamed:self.vmName];
+	id machine = session.virtualMachine;
+	if (machine == nil) {
+		return;
+	}
+	VFLDisplayView *display = [[VFLDisplayView alloc] initWithMachine:machine];
+	if (!display.available) {
+		return;
+	}
+	display.translatesAutoresizingMaskIntoConstraints = NO;
+	[self.view insertSubview:display aboveSubview:self.terminalView];
+
+	[NSLayoutConstraint activateConstraints:@[
+		[display.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:36.0],
+		[display.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+		[display.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+		[display.bottomAnchor constraintEqualToAnchor:self.keyInputView.topAnchor],
+	]];
+
+	self.displayView = display;
+	self.displayCount = MAX(self.displayCount, display.displayCount);
+	[self setDisplayActive:YES];
+	[self rebuildControlMenu];
+}
+
+/// 客户机可能还在启动，framebuffer 晚一点才发布；短暂重试几次。
+- (void)scheduleDisplayPreparation {
+	if (self.displayView != nil || self.displayAttempts >= 6) {
+		return;
+	}
+	self.displayAttempts += 1;
+	__weak typeof(self) weakSelf = self;
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+				   dispatch_get_main_queue(), ^{
+		[weakSelf prepareDisplayIfPossible];
+		[weakSelf scheduleDisplayPreparation];
+	});
+}
+
+- (void)setDisplayActive:(BOOL)active {
+	if (self.displayView == nil) {
+		return;
+	}
+	self.displayActive = active;
+	self.displayView.hidden = !active;
+	self.terminalView.hidden = active;
+	[self rebuildControlMenu];
+}
+
+- (void)tearDownDisplay {
+	[self.displayView cancelAllTouches];
+	[self.displayView removeFromSuperview];
+	self.displayView = nil;
+	self.displayActive = NO;
+	self.displayAttempts = 0;
+	self.terminalView.hidden = NO;
 }
 
 - (void)focusKeyboard {
@@ -286,6 +364,8 @@
 										 identifier:nil
 											handler:^(__kindof UIAction *selected) {
 			weakSelf.currentDisplay = display;
+			weakSelf.displayView.displayIndex = display - 1;
+			[weakSelf setDisplayActive:YES];
 			[weakSelf updateHUD:nil];
 			[weakSelf rebuildControlMenu];
 		}];
@@ -369,6 +449,16 @@
 
 	NSMutableArray<UIMenuElement *> *children = [NSMutableArray array];
 	[children addObject:back];
+	if (self.displayView != nil) {
+		UIAction *toggle = [UIAction actionWithTitle:self.displayActive ? @"切换到串口控制台" : @"切换到画面"
+											  image:[UIImage systemImageNamed:
+													 self.displayActive ? @"terminal" : @"display"]
+										 identifier:nil
+											handler:^(__kindof UIAction *selected) {
+			[weakSelf setDisplayActive:!weakSelf.displayActive];
+		}];
+		[children addObject:toggle];
+	}
 	[children addObject:ctrlC];
 	[children addObject:keyboard];
 	[children addObjectsFromArray:heavyMenus];

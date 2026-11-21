@@ -283,8 +283,18 @@
 }
 
 - (void)importIsoTapped {
+	// SDK 没有 UTTypeISO 常量：ISO 的 UTI 是 public.iso9660，再用扩展名兜底。
+	UTType *isoType = [UTType typeWithIdentifier:@"public.iso9660"]
+		?: [UTType typeWithFilenameExtension:@"iso"];
+	NSMutableArray<UTType *> *types = [NSMutableArray array];
+	if (isoType != nil) {
+		[types addObject:isoType];
+	}
+	if (UTTypeDiskImage != nil && ![types containsObject:UTTypeDiskImage]) {
+		[types addObject:UTTypeDiskImage];
+	}
 	UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc]
-		initForOpeningContentTypes:@[ UTTypeISO, UTTypeDiskImage ]
+		initForOpeningContentTypes:types
 						   asCopy:YES];
 	picker.delegate = self;
 	picker.allowsMultipleSelection = NO;

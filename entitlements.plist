@@ -12,6 +12,13 @@
 	     在 validate 阶段直接报 "doesn't have the entitlement"。 -->
 	<key>com.apple.security.virtualization</key>
 	<true/>
+	<!-- 从 macOS 提取的 VZ 还会检查这几项（与 VirtualMacOniPad 一致）。 -->
+	<key>com.apple.private.virtualization</key>
+	<true/>
+	<key>com.apple.virtualization.avp.videotoolbox</key>
+	<true/>
+	<key>com.apple.vm.networking</key>
+	<true/>
 	<!-- 加载 ad-hoc 签名的第三方二进制（Hypervisor / Virtualization 之外的自带组件）。 -->
 	<key>com.apple.private.amfi.can-execute-cdhash</key>
 	<true/>

@@ -3,3 +3,6 @@ packages/
 obj/
 *.deb
 .DS_Store
+
+# 本机从 macOS IPSW 提取并重签的 VZ 框架，体积大且不可再分发
+vendor/

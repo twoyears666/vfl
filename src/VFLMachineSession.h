@@ -34,6 +34,8 @@ FOUNDATION_EXPORT NSString *VFLMachineStateText(VFLMachineState state);
 @property (nonatomic, readonly) VFLMachineState state;
 @property (nonatomic, readonly) NSString *lastMessage;
 @property (nonatomic, readonly) BOOL isActive;
+/// 底层的 VZVirtualMachine；没启动时为 nil。画面视图要拿它取 framebuffer。
+@property (nonatomic, readonly, nullable) id virtualMachine;
 
 - (instancetype)initWithDefinition:(VFLVMDefinition *)definition;
 
