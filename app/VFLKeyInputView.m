@@ -326,7 +326,7 @@ static NSData *VFLDataFromHexString(NSString *hex) {
 	}
 }
 
-- (void)pressesCancelled:(NSSet<UIPress> *)presses withEvent:(UIPressesEvent *)event {
+- (void)pressesCancelled:(NSSet<UIPress *> *)presses withEvent:(UIPressesEvent *)event {
 	[self pressesEnded:presses withEvent:event];
 }
 
