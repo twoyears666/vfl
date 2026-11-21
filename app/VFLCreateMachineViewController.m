@@ -7,6 +7,7 @@
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #import "VFLDistroIcon.h"
+#import "VFLISOExtractor.h"
 #import "VFLVMDefinition.h"
 
 @interface VFLCreateMachineViewController () <UIDocumentPickerDelegate>
@@ -340,6 +341,45 @@
 	self.isoPath = destinationPath;
 	self.isoLabel.text = destinationPath;
 	self.isoLabel.textColor = UIColor.labelColor;
+	[self extractBootFilesFromISOAtPath:destinationPath];
+}
+
+/// 从 ISO 里抽内核 / initrd，成功就自动填进系统卡片，省掉手动找路径。
+- (void)extractBootFilesFromISOAtPath:(NSString *)isoPath {
+	self.isoLabel.text = [NSString stringWithFormat:@"%@\n正在从镜像提取内核…", isoPath];
+	self.isoLabel.textColor = UIColor.secondaryLabelColor;
+
+	NSString *folder = [VFLBootDirectory() stringByAppendingPathComponent:
+						isoPath.lastPathComponent.stringByDeletingPathExtension];
+	__weak typeof(self) weakSelf = self;
+	dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+		NSString *kernel = nil;
+		NSString *initrd = nil;
+		NSError *error = nil;
+		BOOL ok = [VFLISOExtractor extractBootFilesFromISOAtPath:isoPath
+												   intoDirectory:folder
+														  kernel:&kernel
+														  initrd:&initrd
+														   error:&error];
+		dispatch_async(dispatch_get_main_queue(), ^{
+			typeof(self) strongSelf = weakSelf;
+			if (strongSelf == nil) {
+				return;
+			}
+			if (!ok) {
+				strongSelf.isoLabel.text = [NSString stringWithFormat:@"%@\n没提取到内核：%@，请手动填写系统路径。",
+											isoPath, error.localizedDescription ?: @"未知原因"];
+				strongSelf.isoLabel.textColor = UIColor.secondaryLabelColor;
+				return;
+			}
+			strongSelf.kernelField.text = kernel;
+			strongSelf.initrdField.text = initrd ?: @"";
+			strongSelf.isoLabel.text = [NSString stringWithFormat:@"%@\n已提取：%@", isoPath,
+										kernel.lastPathComponent];
+			strongSelf.isoLabel.textColor = UIColor.labelColor;
+			[strongSelf updateDoneState];
+		});
+	});
 }
 
 - (void)cancelTapped {

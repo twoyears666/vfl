@@ -29,6 +29,10 @@ NSString *VFLImagesDirectory(void) {
 	return [VFLDataDirectory() stringByAppendingPathComponent:@"images"];
 }
 
+NSString *VFLBootDirectory(void) {
+	return [VFLDataDirectory() stringByAppendingPathComponent:@"boot"];
+}
+
 NSString *VFLRunDirectory(void) {
 	return [VFLDataDirectory() stringByAppendingPathComponent:@"run"];
 }
@@ -53,6 +57,7 @@ NSString *VFLSocketPath(void) {
 	definition.networkEnabled = [dictionary[@"network"] boolValue];
 	definition.macAddress = dictionary[@"mac"] ?: @"";
 	definition.displayCount = [dictionary[@"displays"] unsignedIntegerValue] ?: 1;
+	definition.bootCount = [dictionary[@"bootCount"] unsignedIntegerValue];
 	return definition;
 }
 
@@ -70,6 +75,7 @@ NSString *VFLSocketPath(void) {
 		@"network": @(self.networkEnabled),
 		@"mac": self.macAddress,
 		@"displays": @(self.displayCount),
+		@"bootCount": @(self.bootCount),
 	};
 }
 

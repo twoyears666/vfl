@@ -99,6 +99,18 @@
 	return existing;
 }
 
+- (void)discardStoppedSessionNamed:(NSString *)name {
+	if (name.length == 0) {
+		return;
+	}
+	[_lock lock];
+	VFLMachineSession *session = self.sessionsByName[name];
+	if (session != nil && !session.isActive) {
+		[self.sessionsByName removeObjectForKey:name];
+	}
+	[_lock unlock];
+}
+
 #pragma mark - 监听
 
 - (BOOL)startWithError:(NSError **)error {
@@ -222,6 +234,10 @@
 
 	if ([command isEqualToString:@"start"] || [command isEqualToString:@"control"]
 		|| [command isEqualToString:@"shutdown"] || [command isEqualToString:@"kill"]) {
+		// 启动前丢掉已停止的旧会话，让磁盘 / 内存等定义改动真正生效。
+		if ([command isEqualToString:@"start"]) {
+			[self discardStoppedSessionNamed:name];
+		}
 		NSError *error = nil;
 		VFLMachineSession *session = [self ensureSessionForDefinitionName:name error:&error];
 		if (session == nil) {
@@ -233,6 +249,13 @@
 			if (![session startWithError:&error]) {
 				[connection sendJSON:@{ @"ok": @NO, @"error": error.localizedDescription ?: @"启动失败" }];
 				return;
+			}
+			// 成功启动才累加，GUI 用这个次数判断是否该问「删掉安装镜像」。
+			VFLVMStore *store = [[VFLVMStore alloc] init];
+			VFLVMDefinition *definition = [store definitionNamed:name];
+			if (definition != nil) {
+				definition.bootCount += 1;
+				[store saveDefinition:definition error:NULL];
 			}
 			[connection sendJSON:@{ @"ok": @YES, @"state": VFLMachineStateText(session.state) }];
 			return;

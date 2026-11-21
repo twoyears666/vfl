@@ -18,6 +18,7 @@ APPLICATION_NAME = VFL
 VFL_FILES = $(wildcard app/*.m) \
             $(VFL_SHARED_FILES) \
             src/VFLServer.m \
+            src/VFLISOExtractor.m \
             src/VFLTerminalEmulator.m \
             src/VFLTerminalView.m
 VFL_FRAMEWORKS = UIKit Foundation UniformTypeIdentifiers

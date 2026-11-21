@@ -581,12 +581,94 @@
 		[self sendCommand:@"shutdown" successMessage:@"正在请求关机…" completion:nil];
 		return;
 	}
+
+	// 启动前重新读定义：bootCount 由服务端在成功启动后累加。
+	VFLVMDefinition *latest = [[[VFLVMStore alloc] init] definitionNamed:self.vmName] ?: self.definition;
+	NSInteger installImageIndex = [self installImageIndexInDefinition:latest];
+	if (installImageIndex >= 0 && latest.bootCount >= 1) {
+		[self confirmRemovingInstallImageAtIndex:installImageIndex definition:latest];
+		return;
+	}
+	[self beginStart];
+}
+
+- (void)beginStart {
 	NSString *name = self.vmName;
 	[self sendCommand:@"start" successMessage:@"正在启动…" completion:^(BOOL ok) {
 		if (ok && name.length > 0) {
 			[self presentConsoleForVMNamed:name];
 		}
 	}];
+}
+
+/// 第一块盘是系统盘；安装镜像只可能是挂在后面的只读盘。
+- (NSInteger)installImageIndexInDefinition:(VFLVMDefinition *)definition {
+	NSArray<NSString *> *paths = definition.diskPaths;
+	for (NSUInteger index = 1; index < paths.count; index++) {
+		if ([paths[index] hasPrefix:VFLImagesDirectory()]) {
+			return (NSInteger)index;
+		}
+	}
+	return -1;
+}
+
+- (void)confirmRemovingInstallImageAtIndex:(NSInteger)index
+								definition:(VFLVMDefinition *)definition {
+	if (index < 0 || (NSUInteger)index >= definition.diskPaths.count) {
+		return;
+	}
+	NSString *path = definition.diskPaths[(NSUInteger)index];
+	NSString *message = [NSString stringWithFormat:
+		@"这台虚拟机已经启动过 %lu 次。安装完成后不再需要安装镜像，要删除它吗？\n\n%@\n\n删除后无法恢复；选择「保留」则每次启动都会再问一次。",
+		(unsigned long)definition.bootCount, path.lastPathComponent];
+	UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"安装已完成？"
+																  message:message
+														   preferredStyle:UIAlertControllerStyleAlert];
+	__weak typeof(self) weakSelf = self;
+	[alert addAction:[UIAlertAction actionWithTitle:@"删除镜像"
+											  style:UIAlertActionStyleDestructive
+											handler:^(UIAlertAction *action) {
+		[weakSelf removeInstallImageAtIndex:index definition:definition];
+		[weakSelf beginStart];
+	}]];
+	[alert addAction:[UIAlertAction actionWithTitle:@"保留"
+											  style:UIAlertActionStyleCancel
+											handler:^(UIAlertAction *action) {
+		[weakSelf beginStart];
+	}]];
+	[self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)removeInstallImageAtIndex:(NSInteger)index definition:(VFLVMDefinition *)definition {
+	if (index < 0 || (NSUInteger)index >= definition.diskPaths.count) {
+		return;
+	}
+	NSString *path = definition.diskPaths[(NSUInteger)index];
+	NSMutableArray<NSString *> *paths = [definition.diskPaths mutableCopy];
+	[paths removeObjectAtIndex:(NSUInteger)index];
+
+	NSMutableArray<NSNumber *> *readOnly = [NSMutableArray array];
+	for (NSNumber *number in definition.readOnlyDisks) {
+		NSInteger value = number.integerValue;
+		if (value == index) {
+			continue;
+		}
+		if (value > index) {
+			value -= 1;
+		}
+		[readOnly addObject:@(value)];
+	}
+	definition.diskPaths = paths;
+	definition.readOnlyDisks = readOnly;
+	self.definition = definition;
+	[self saveDefinition];
+
+	// 只删导入目录里的镜像，避免误删用户自己放在别处的盘。
+	if ([path hasPrefix:VFLImagesDirectory()]) {
+		[NSFileManager.defaultManager removeItemAtPath:path error:NULL];
+	}
+	self.statusMessage = @"已删除安装镜像";
+	[self rebuildContent];
 }
 
 - (void)killTapped {

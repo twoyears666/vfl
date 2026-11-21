@@ -3,10 +3,10 @@ set -e
 
 # 虚拟机定义、磁盘、安装镜像与 socket 都放在 mobile 家目录下：CLI 与 GUI 共用。
 data=/var/jb/var/mobile/Library/VFL
-mkdir -p "$data/vms" "$data/run" "$data/disks" "$data/images"
+mkdir -p "$data/vms" "$data/run" "$data/disks" "$data/images" "$data/boot"
 chown -R mobile:mobile "$data"
 chmod 755 "$data"
-chmod 775 "$data/vms" "$data/disks"
+chmod 775 "$data/vms" "$data/disks" "$data/boot"
 
 # App 内托管 VM（画面必须与 VZVirtualMachine 同进程），默认不启动独立 daemon，
 # 否则它会先占住 socket。需要无头模式时手动 launchctl load 即可。

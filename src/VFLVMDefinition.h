@@ -11,6 +11,8 @@ FOUNDATION_EXPORT NSString *VFLVirtualMachinesDirectory(void);
 FOUNDATION_EXPORT NSString *VFLDisksDirectory(void);
 /// 导入的安装镜像（ISO）统一放这里，守护进程才读得到。
 FOUNDATION_EXPORT NSString *VFLImagesDirectory(void);
+/// 从 ISO 里抽出来的内核 / initrd 放这里。
+FOUNDATION_EXPORT NSString *VFLBootDirectory(void);
 FOUNDATION_EXPORT NSString *VFLRunDirectory(void);
 FOUNDATION_EXPORT NSString *VFLSocketPath(void);
 
@@ -33,6 +35,8 @@ FOUNDATION_EXPORT NSString *VFLSocketPath(void);
 @property (nonatomic, copy) NSString *macAddress;
 /// 显示设备数量。iPadOS 上 VZ 不提供画面视图，这个值只影响客户机配置。
 @property (nonatomic, assign) NSUInteger displayCount;
+/// 成功启动的次数。第二轮启动起 GUI 会问是否删除安装镜像。
+@property (nonatomic, assign) NSUInteger bootCount;
 
 + (instancetype)definitionWithDictionary:(NSDictionary *)dictionary;
 - (NSDictionary *)dictionaryRepresentation;
