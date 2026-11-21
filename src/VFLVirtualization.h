@@ -24,7 +24,7 @@ typedef NS_ENUM(NSInteger, VZVirtualMachineState) {
 @interface VZVirtualMachineConfiguration : NSObject
 @property (nonatomic) NSUInteger CPUCount;
 @property (nonatomic) unsigned long long memorySize;
-@property (nonatomic, copy) NSArray *bootLoader;
+@property (nonatomic, strong) id bootLoader;
 @property (nonatomic, copy) NSArray *entropyDevices;
 @property (nonatomic, copy) NSArray *networkDevices;
 @property (nonatomic, copy) NSArray *serialPorts;
@@ -38,6 +38,19 @@ typedef NS_ENUM(NSInteger, VZVirtualMachineState) {
 - (instancetype)initWithKernelURL:(NSURL *)kernelURL;
 @property (nonatomic, copy) NSString *commandLine;
 @property (nonatomic, copy, nullable) NSURL *initialRamdiskURL;
+@end
+
+/// EFI 引导器：让固件自己从 ISO / 系统盘找 EFI/BOOT/BOOTAA64.EFI。
+/// 安装阶段由 ISO 的 GRUB 装系统，装完删掉 ISO 就直接从系统盘引导。
+@interface VZEFIVariableStore : NSObject
+- (instancetype)initWithURL:(NSURL *)URL;
+- (instancetype)initCreatingVariableStoreAtURL:(NSURL *)URL
+									  options:(NSUInteger)options
+										error:(NSError **)error;
+@end
+
+@interface VZEFIBootLoader : NSObject
+@property (nonatomic, strong) VZEFIVariableStore *variableStore;
 @end
 
 @interface VZVirtualMachine : NSObject

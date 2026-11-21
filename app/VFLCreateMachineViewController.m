@@ -26,6 +26,7 @@
 @property (nonatomic, strong) UILabel *diskValueLabel;
 @property (nonatomic, strong) UITextField *kernelField;
 @property (nonatomic, strong) UITextField *initrdField;
+@property (nonatomic, strong) UISegmentedControl *bootModeControl;
 @property (nonatomic, copy) NSString *isoPath;
 @property (nonatomic, strong) UILabel *isoLabel;
 
@@ -195,14 +196,20 @@
 	self.initrdField = [self textFieldWithPlaceholder:@"可选"];
 	self.initrdField.keyboardType = UIKeyboardTypeURL;
 
+	self.bootModeControl = [[UISegmentedControl alloc] initWithItems:@[ @"EFI 固件", @"内核直启" ]];
+	self.bootModeControl.selectedSegmentIndex = 0;
+	[self.bootModeControl addTarget:self action:@selector(bootModeChanged:)
+				   forControlEvents:UIControlEventValueChanged];
+
 	UILabel *note = [[UILabel alloc] init];
-	note.text = @"内核与 initrd 用设备上的绝对路径，例如 "
-				@"/var/jb/var/mobile/Library/VFL/kernels/vmlinuz";
+	note.text = @"默认用 EFI：安装镜像自带引导器，系统装到磁盘后删掉镜像也能直接启动。"
+				@"只有镜像不支持 EFI 时才选「内核直启」，并填下面两个路径。";
 	note.numberOfLines = 0;
 	note.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
 	note.textColor = UIColor.secondaryLabelColor;
 
 	return [self cardWithTitle:@"系统" rows:@[
+		[self rowWithTitle:@"启动方式" control:self.bootModeControl],
 		[self rowWithTitle:@"内核" control:self.kernelField],
 		[self rowWithTitle:@"初始内存盘" control:self.initrdField],
 		note,
@@ -279,8 +286,14 @@
 }
 
 - (void)updateDoneState {
+	BOOL needsKernel = self.bootModeControl.selectedSegmentIndex == 1;
+	BOOL hasKernel = self.kernelField.text.length > 0;
 	self.navigationItem.rightBarButtonItem.enabled =
-		self.nameField.text.length > 0 && self.kernelField.text.length > 0;
+		self.nameField.text.length > 0 && (!needsKernel || hasKernel);
+}
+
+- (void)bootModeChanged:(UISegmentedControl *)sender {
+	[self updateDoneState];
 }
 
 - (void)importIsoTapped {
@@ -341,6 +354,8 @@
 	self.isoPath = destinationPath;
 	self.isoLabel.text = destinationPath;
 	self.isoLabel.textColor = UIColor.labelColor;
+	// 装了安装镜像就默认走 EFI：装完删掉镜像后仍能从系统盘启动。
+	self.bootModeControl.selectedSegmentIndex = 0;
 	[self extractBootFilesFromISOAtPath:destinationPath];
 }
 
@@ -393,7 +408,8 @@
 					  NSCharacterSet.whitespaceAndNewlineCharacterSet];
 	NSString *kernel = [self.kernelField.text stringByTrimmingCharactersInSet:
 						NSCharacterSet.whitespaceAndNewlineCharacterSet];
-	if (name.length == 0 || kernel.length == 0) {
+	BOOL kernelMode = self.bootModeControl.selectedSegmentIndex == 1;
+	if (name.length == 0 || (kernelMode && kernel.length == 0)) {
 		return;
 	}
 
@@ -427,6 +443,7 @@
 	definition.distroIdentifier = self.selectedDistro;
 	definition.networkEnabled = YES;
 	definition.displayCount = 1;
+	definition.bootMode = kernelMode ? VFLBootModeKernel : VFLBootModeEFI;
 	if (self.isoPath.length > 0) {
 		definition.diskPaths = @[ diskPath, self.isoPath ];
 		definition.readOnlyDisks = @[ @1 ];

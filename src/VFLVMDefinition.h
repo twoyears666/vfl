@@ -13,8 +13,16 @@ FOUNDATION_EXPORT NSString *VFLDisksDirectory(void);
 FOUNDATION_EXPORT NSString *VFLImagesDirectory(void);
 /// 从 ISO 里抽出来的内核 / initrd 放这里。
 FOUNDATION_EXPORT NSString *VFLBootDirectory(void);
+/// EFI 变量存储（NVRAM）放这里，每台虚拟机一个文件。
+FOUNDATION_EXPORT NSString *VFLEFIDirectory(void);
 FOUNDATION_EXPORT NSString *VFLRunDirectory(void);
 FOUNDATION_EXPORT NSString *VFLSocketPath(void);
+
+/// 引导方式：EFI 固件可以装完系统后直接从磁盘引导；内核直启需要 host 上有内核文件。
+typedef NS_ENUM(NSInteger, VFLBootMode) {
+	VFLBootModeEFI = 0,
+	VFLBootModeKernel = 1,
+};
 
 /// 一台虚拟机的定义。GUI 和 CLI 共用同一份 JSON，守护进程只读它。
 @interface VFLVMDefinition : NSObject
@@ -37,6 +45,10 @@ FOUNDATION_EXPORT NSString *VFLSocketPath(void);
 @property (nonatomic, assign) NSUInteger displayCount;
 /// 成功启动的次数。第二轮启动起 GUI 会问是否删除安装镜像。
 @property (nonatomic, assign) NSUInteger bootCount;
+/// 默认 EFI：安装镜像能自行引导，装完删镜像后仍能从系统盘启动。
+@property (nonatomic, assign) VFLBootMode bootMode;
+/// EFI NVRAM 文件路径（按虚拟机名派生，跨启动保留引导项）。
+@property (nonatomic, readonly, copy) NSString *efiVariableStorePath;
 
 + (instancetype)definitionWithDictionary:(NSDictionary *)dictionary;
 - (NSDictionary *)dictionaryRepresentation;

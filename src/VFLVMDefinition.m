@@ -33,6 +33,10 @@ NSString *VFLBootDirectory(void) {
 	return [VFLDataDirectory() stringByAppendingPathComponent:@"boot"];
 }
 
+NSString *VFLEFIDirectory(void) {
+	return [VFLDataDirectory() stringByAppendingPathComponent:@"efi"];
+}
+
 NSString *VFLRunDirectory(void) {
 	return [VFLDataDirectory() stringByAppendingPathComponent:@"run"];
 }
@@ -58,6 +62,9 @@ NSString *VFLSocketPath(void) {
 	definition.macAddress = dictionary[@"mac"] ?: @"";
 	definition.displayCount = [dictionary[@"displays"] unsignedIntegerValue] ?: 1;
 	definition.bootCount = [dictionary[@"bootCount"] unsignedIntegerValue];
+	// 旧定义没有 bootMode，按内核直启处理，避免升级后老虚拟机突然走 EFI。
+	definition.bootMode = [dictionary[@"bootMode"] isEqualToString:@"efi"]
+		? VFLBootModeEFI : VFLBootModeKernel;
 	return definition;
 }
 
@@ -76,7 +83,14 @@ NSString *VFLSocketPath(void) {
 		@"mac": self.macAddress,
 		@"displays": @(self.displayCount),
 		@"bootCount": @(self.bootCount),
+		@"bootMode": self.bootMode == VFLBootModeKernel ? @"kernel" : @"efi",
 	};
+}
+
+- (NSString *)efiVariableStorePath {
+	NSString *base = self.name.length > 0 ? self.name : @"linux";
+	return [VFLEFIDirectory() stringByAppendingPathComponent:
+			[base stringByAppendingPathExtension:@"nvram"]];
 }
 
 - (NSString *)effectiveCommandLine {

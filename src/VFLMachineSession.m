@@ -216,14 +216,6 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 	}
 
 	VFLVMDefinition *definition = self.definition;
-	if (![NSFileManager.defaultManager fileExistsAtPath:definition.kernelPath]) {
-		if (error != NULL) {
-			*error = [NSError errorWithDomain:@"vfl" code:11
-									userInfo:@{ NSLocalizedDescriptionKey:
-													[NSString stringWithFormat:@"内核不存在：%@", definition.kernelPath] }];
-		}
-		return NO;
-	}
 
 	[self setState:VFLMachineStateStarting message:@"创建虚拟硬件…"];
 
@@ -237,13 +229,67 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 	configuration.CPUCount = MAX((NSUInteger)1, definition.cpuCount);
 	configuration.memorySize = MAX((unsigned long long)512, definition.memoryMB) * 1024ULL * 1024ULL;
 
-	VZLinuxBootLoader *loader = [(VZLinuxBootLoader *)VFLAlloc(@"VZLinuxBootLoader")
-								 initWithKernelURL:[NSURL fileURLWithPath:definition.kernelPath]];
-	loader.commandLine = [definition effectiveCommandLine];
-	if (definition.initrdPath.length > 0) {
-		loader.initialRamdiskURL = [NSURL fileURLWithPath:definition.initrdPath];
+	// EFI 模式由固件自己找 ISO / 系统盘上的 EFI 引导器：安装阶段从 ISO 起，
+	// 装完删掉 ISO 后直接从系统盘起，不需要 host 上有内核文件。
+	id bootLoader = nil;
+	if (definition.bootMode == VFLBootModeEFI) {
+		Class storeClass = NSClassFromString(@"VZEFIVariableStore");
+		Class efiLoaderClass = NSClassFromString(@"VZEFIBootLoader");
+		if (storeClass == Nil || efiLoaderClass == Nil) {
+			[self setState:VFLMachineStateError message:@"这套 Virtualization 不支持 EFI"];
+			if (error != NULL) {
+				*error = [NSError errorWithDomain:@"vfl" code:13
+										userInfo:@{ NSLocalizedDescriptionKey:
+														@"这套 Virtualization 框架没有 EFI 引导类" }];
+			}
+			return NO;
+		}
+		[NSFileManager.defaultManager createDirectoryAtPath:VFLEFIDirectory()
+							   withIntermediateDirectories:YES
+												attributes:nil
+													 error:NULL];
+		NSString *storePath = definition.efiVariableStorePath;
+		NSURL *storeURL = [NSURL fileURLWithPath:storePath];
+		NSError *storeError = nil;
+		VZEFIVariableStore *store = nil;
+		if ([NSFileManager.defaultManager fileExistsAtPath:storePath]) {
+			store = [(VZEFIVariableStore *)[storeClass alloc] initWithURL:storeURL];
+		} else {
+			store = [(VZEFIVariableStore *)[storeClass alloc]
+					 initCreatingVariableStoreAtURL:storeURL
+										   options:0
+											 error:&storeError];
+		}
+		if (store == nil) {
+			[self setState:VFLMachineStateError message:storeError.localizedDescription ?: @"EFI 变量存储创建失败"];
+			if (error != NULL) {
+				*error = storeError ?: [NSError errorWithDomain:@"vfl" code:14
+													 userInfo:@{ NSLocalizedDescriptionKey:
+																	 @"EFI 变量存储创建失败" }];
+			}
+			return NO;
+		}
+		VZEFIBootLoader *efiLoader = [(VZEFIBootLoader *)[efiLoaderClass alloc] init];
+		efiLoader.variableStore = store;
+		bootLoader = efiLoader;
+	} else {
+		if (![NSFileManager.defaultManager fileExistsAtPath:definition.kernelPath]) {
+			if (error != NULL) {
+				*error = [NSError errorWithDomain:@"vfl" code:11
+										userInfo:@{ NSLocalizedDescriptionKey:
+														[NSString stringWithFormat:@"内核不存在：%@", definition.kernelPath] }];
+			}
+			return NO;
+		}
+		VZLinuxBootLoader *loader = [(VZLinuxBootLoader *)VFLAlloc(@"VZLinuxBootLoader")
+									 initWithKernelURL:[NSURL fileURLWithPath:definition.kernelPath]];
+		loader.commandLine = [definition effectiveCommandLine];
+		if (definition.initrdPath.length > 0) {
+			loader.initialRamdiskURL = [NSURL fileURLWithPath:definition.initrdPath];
+		}
+		bootLoader = loader;
 	}
-	configuration.bootLoader = @[ loader ];
+	configuration.bootLoader = bootLoader;
 
 	// 串口：hostToGuest 让客户机读，guestToHost 让客户机写。
 	int hostToGuest[2] = { -1, -1 };

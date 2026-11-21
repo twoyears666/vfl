@@ -191,8 +191,16 @@
 		[self rowWithTitle:@"状态" control:[self valueLabelWithText:[self stateText]]],
 	]]];
 
+	UISegmentedControl *bootModeControl =
+		[[UISegmentedControl alloc] initWithItems:@[ @"EFI 固件", @"内核直启" ]];
+	bootModeControl.selectedSegmentIndex = definition.bootMode == VFLBootModeKernel ? 1 : 0;
+	[bootModeControl addTarget:self
+						action:@selector(bootModeChanged:)
+			  forControlEvents:UIControlEventValueChanged];
+
 	// 系统
 	[self.stackView addArrangedSubview:[self cardWithTitle:@"系统" rows:@[
+		[self rowWithTitle:@"启动方式" control:bootModeControl],
 		[self rowWithTitle:@"内核" control:[self textFieldWithPlaceholder:@"vmlinuz 路径"
 																	text:definition.kernelPath
 																  action:@selector(kernelPathChanged:)]],
@@ -513,6 +521,11 @@
 	}
 }
 
+- (void)bootModeChanged:(UISegmentedControl *)sender {
+	self.definition.bootMode = sender.selectedSegmentIndex == 1 ? VFLBootModeKernel : VFLBootModeEFI;
+	[self saveDefinition];
+}
+
 - (void)kernelPathChanged:(UITextField *)sender {
 	self.definition.kernelPath = sender.text;
 	[self saveDefinition];
@@ -585,7 +598,7 @@
 	// 启动前重新读定义：bootCount 由服务端在成功启动后累加。
 	VFLVMDefinition *latest = [[[VFLVMStore alloc] init] definitionNamed:self.vmName] ?: self.definition;
 	NSInteger installImageIndex = [self installImageIndexInDefinition:latest];
-	if (installImageIndex >= 0 && latest.bootCount >= 1) {
+	if (installImageIndex >= 0 && latest.bootCount >= 1 && latest.bootMode == VFLBootModeEFI) {
 		[self confirmRemovingInstallImageAtIndex:installImageIndex definition:latest];
 		return;
 	}
@@ -666,6 +679,9 @@
 	// 只删导入目录里的镜像，避免误删用户自己放在别处的盘。
 	if ([path hasPrefix:VFLImagesDirectory()]) {
 		[NSFileManager.defaultManager removeItemAtPath:path error:NULL];
+		// NVRAM 里可能记着「从 ISO 启动」的引导项；删掉后让固件重新枚举，
+		// 下次就会落到系统盘的 \EFI\BOOT\BOOTAA64.EFI 上。
+		[NSFileManager.defaultManager removeItemAtPath:definition.efiVariableStorePath error:NULL];
 	}
 	self.statusMessage = @"已删除安装镜像";
 	[self rebuildContent];
