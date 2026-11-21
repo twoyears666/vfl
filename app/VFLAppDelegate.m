@@ -3,6 +3,8 @@
 
 #import "VFLAppDelegate.h"
 
+#import <execinfo.h>
+#import <signal.h>
 #import <stdio.h>
 
 #import "VFLHostService.h"
@@ -19,10 +21,34 @@ static void VFLHandleUncaughtException(NSException *exception) {
 	fflush(stderr);
 }
 
+/// VZ 内部崩溃是信号不是异常，单独抓 SIGSEGV/SIGABRT 等并打回溯。
+static void VFLHandleFatalSignal(int signalNumber) {
+	fprintf(stderr, "[VFL] 崩溃信号 %d (%s)\n",
+			signalNumber, strsignal(signalNumber) ?: "unknown");
+	void *frames[64];
+	int count = backtrace(frames, 64);
+	backtrace_symbols_fd(frames, count, STDERR_FILENO);
+	fflush(stderr);
+	signal(signalNumber, SIG_DFL);
+	raise(signalNumber);
+}
+
+static void VFLInstallCrashHandlers(void) {
+	NSSetUncaughtExceptionHandler(VFLHandleUncaughtException);
+	for (int number = 0; number < NSIG; number++) {
+		switch (number) {
+			case SIGSEGV: case SIGABRT: case SIGBUS:
+			case SIGILL: case SIGFPE: case SIGTRAP:
+				signal(number, VFLHandleFatalSignal);
+				break;
+		}
+	}
+}
+
 - (BOOL)application:(UIApplication *)application
 	didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
 	[self redirectLogToFile];
-	NSSetUncaughtExceptionHandler(VFLHandleUncaughtException);
+	VFLInstallCrashHandlers();
 	// 先抢 socket：GUI 要拿到 VZVirtualMachine 才能显示画面。
 	[[VFLHostService shared] start];
 

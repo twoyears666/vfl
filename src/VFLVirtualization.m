@@ -7,6 +7,8 @@
 #import <mach-o/dyld.h>
 #import <objc/runtime.h>
 #import <stdlib.h>
+#import <sys/utsname.h>
+#import <unistd.h>
 
 #import "VFLVMDefinition.h"
 
@@ -97,6 +99,18 @@ BOOL VFLVirtualizationPrepare(NSString **diagnostic) {
 	dispatch_once(&once, ^{
 		NSMutableArray<NSString *> *failures = [NSMutableArray array];
 
+		// iPadOS 16.4 起内核移除了 Hypervisor；此时 VZ 一启动就会崩，提前拦住并给出原因。
+		NSOperatingSystemVersion os = NSProcessInfo.processInfo.operatingSystemVersion;
+		struct utsname systemInfo = { 0 };
+		uname(&systemInfo);
+		NSLog(@"[VFL] 设备 %s，系统 %ld.%ld.%ld", systemInfo.machine,
+			  (long)os.majorVersion, (long)os.minorVersion, (long)os.patchVersion);
+		if (os.majorVersion > 16 || (os.majorVersion == 16 && os.minorVersion >= 4)) {
+			reason = @"iPadOS 16.4 起内核已移除 Hypervisor 支持，无法硬件虚拟化";
+			ready = NO;
+			return;
+		}
+
 		// 1. 先加载 host hook：它给 VZ 提供 iOS 缺失的 API 与 XPC 桥。
 		NSString *bundlePath = NSBundle.mainBundle.bundlePath;
 		// hook 默认去找 /var/root/VirtualMac/payload；我们用 App 自带的副本。
@@ -120,6 +134,10 @@ BOOL VFLVirtualizationPrepare(NSString **diagnostic) {
 		if ([NSFileManager.defaultManager fileExistsAtPath:booter]) {
 			setenv("VZ_AVP_BOOTER", booter.fileSystemRepresentation, 1);
 		}
+		// 每次启动都从空日志开始，避免把上一轮的内容当成这次失败的原因。
+		unlink("/tmp/vzxpchook.log");
+		unlink("/tmp/vmmhook.log");
+		unlink(vmmStderr.fileSystemRepresentation);
 
 		void *hook = NULL;
 		NSString *hookPath = [bundlePath stringByAppendingPathComponent:@"VZHostCompat.dylib"];

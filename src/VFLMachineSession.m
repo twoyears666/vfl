@@ -9,6 +9,7 @@
 #import <unistd.h>
 
 #import "VFLVirtualization.h"
+#import "VFLVMDefinition.h"
 
 static const NSUInteger VFLConsoleBufferLimit = 256 * 1024;
 
@@ -201,6 +202,31 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 }
 
 #pragma mark - 启动
+
+/// 只读文件尾部，避免把几十 MB 的 VMM 日志全塞进 app.log。
+static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
+	NSData *data = [NSData dataWithContentsOfFile:path];
+	if (data.length == 0) {
+		return @"(没有内容)";
+	}
+	if (data.length > limit) {
+		data = [data subdataWithRange:NSMakeRange(data.length - limit, limit)];
+	}
+	return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ?: @"(无法解码)";
+}
+
+/// 启动卡住时把 VMM 侧日志带进 app.log，省得再去翻 /tmp。
+- (void)logVMCompositeLaunchDetail {
+	NSLog(@"[VFL] 启动 20 秒仍未完成，导出 VMM 侧日志");
+	NSArray<NSString *> *paths = @[
+		@"/tmp/vzxpchook.log",
+		@"/tmp/vmmhook.log",
+		[VFLDataDirectory() stringByAppendingPathComponent:@"vmm.stderr.log"],
+	];
+	for (NSString *path in paths) {
+		NSLog(@"[VFL] %@:\n%@", path, VFLLogTail(path, 4096));
+	}
+}
 
 - (BOOL)startWithError:(NSError **)error {
 	NSString *diagnostic = nil;
@@ -427,6 +453,14 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 		}
 		return NO;
 	}
+	__weak typeof(self) monitorSelf = self;
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)),
+				   dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+		typeof(self) strongSelf = monitorSelf;
+		if (strongSelf != nil && strongSelf.state == VFLMachineStateStarting) {
+			[strongSelf logVMCompositeLaunchDetail];
+		}
+	});
 	return YES;
 }
 
