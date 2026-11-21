@@ -18,8 +18,8 @@
 	<key>UserName</key>
 	<string>mobile</string>
 	<key>StandardOutPath</key>
-	<string>/var/jb/var/mobile/Library/VFL/daemon.log</string>
+	<string>/var/mobile/Media/VFL/daemon.log</string>
 	<key>StandardErrorPath</key>
-	<string>/var/jb/var/mobile/Library/VFL/daemon.log</string>
+	<string>/var/mobile/Media/VFL/daemon.log</string>
 </dict>
 </plist>

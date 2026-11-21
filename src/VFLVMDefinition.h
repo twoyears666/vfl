@@ -5,7 +5,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// 数据根目录：rootless 下是 /var/jb/var/mobile/Library/VFL，普通环境退回 /var/mobile/Library/VFL。
+/// 数据根目录：/var/mobile/Media/VFL，文件 App 与 Filza 都能直接访问。
 FOUNDATION_EXPORT NSString *VFLDataDirectory(void);
 FOUNDATION_EXPORT NSString *VFLVirtualMachinesDirectory(void);
 FOUNDATION_EXPORT NSString *VFLDisksDirectory(void);

@@ -3,18 +3,9 @@
 
 #import "VFLVMDefinition.h"
 
-static NSString *VFLRootlessPrefix(void) {
-	static NSString *prefix = nil;
-	static dispatch_once_t once;
-	dispatch_once(&once, ^{
-		NSFileManager *manager = NSFileManager.defaultManager;
-		prefix = [manager fileExistsAtPath:@"/var/jb"] ? @"/var/jb" : @"";
-	});
-	return prefix;
-}
-
+/// 放在 Media 下：文件 App / Filza 能直接看到虚拟机、镜像和日志。
 NSString *VFLDataDirectory(void) {
-	return [VFLRootlessPrefix() stringByAppendingString:@"/var/mobile/Library/VFL"];
+	return @"/var/mobile/Media/VFL";
 }
 
 NSString *VFLVirtualMachinesDirectory(void) {

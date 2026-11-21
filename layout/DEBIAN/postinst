@@ -1,8 +1,13 @@
 #!/bin/sh
 set -e
 
-# 虚拟机定义、磁盘、安装镜像与 socket 都放在 mobile 家目录下：CLI 与 GUI 共用。
-data=/var/jb/var/mobile/Library/VFL
+# 虚拟机定义、磁盘、安装镜像与 socket 都放在 Media 下：CLI 与 GUI 共用，文件 App 也能看到。
+data=/var/mobile/Media/VFL
+legacy=/var/jb/var/mobile/Library/VFL
+if [ -d "$legacy" ] && [ ! -d "$data" ]; then
+	mkdir -p /var/mobile/Media
+	mv "$legacy" "$data"
+fi
 mkdir -p "$data/vms" "$data/run" "$data/disks" "$data/images" "$data/boot" "$data/efi"
 chown -R mobile:mobile "$data"
 chmod 755 "$data"
