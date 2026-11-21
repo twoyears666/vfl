@@ -286,7 +286,7 @@ static NSUInteger VFLFreeTouchIndex(NSUInteger occupied) {
 		id (*makeTouch)(id, SEL, unsigned char, NSInteger, CGPoint, NSInteger, double) =
 			(id (*)(id, SEL, unsigned char, NSInteger, CGPoint, NSInteger, double))objc_msgSend;
 		// class_createInstance 不受 ARC 管理，+1 由下面的 CFRelease 平衡。
-		__unsafe_unretained id raw = (__bridge id)class_createInstance(touchClass, 0);
+		__unsafe_unretained id raw = class_createInstance(touchClass, 0);
 		__unsafe_unretained id touch = makeTouch(raw,
 												 NSSelectorFromString(@"initWithIndex:phase:location:swipeAim:timestamp:"),
 												 (unsigned char)[entry[@"index"] unsignedIntegerValue],
@@ -304,7 +304,7 @@ static NSUInteger VFLFreeTouchIndex(NSUInteger occupied) {
 	}
 
 	id (*makeEvent)(id, SEL, id) = (id (*)(id, SEL, id))objc_msgSend;
-	__unsafe_unretained id rawEvent = (__bridge id)class_createInstance(eventClass, 0);
+	__unsafe_unretained id rawEvent = class_createInstance(eventClass, 0);
 	__unsafe_unretained id multiTouchEvent = makeEvent(rawEvent,
 													   NSSelectorFromString(@"initWithTouches:"),
 													   touchObjects);
