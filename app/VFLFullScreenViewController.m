@@ -287,7 +287,8 @@
 	if (self.displayView == nil) {
 		return;
 	}
-	self.displayActive = active;
+	// 直接写 ivar：这里就是 setter 本身，走 self. 会递归。
+	_displayActive = active;
 	self.displayView.hidden = !active;
 	self.terminalView.hidden = active;
 	[self rebuildControlMenu];
