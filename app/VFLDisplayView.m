@@ -9,9 +9,21 @@
 #import "VFLDisplayView.h"
 
 #import <CoreFoundation/CoreFoundation.h>
+#import <dlfcn.h>
 #import <math.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
+
+/// 动态创建实例。走函数指针调用，ARC 不会把返回值当成 +1，
+/// 所有权由调用方用一次 CFRelease 配平。
+static id VFLAllocInstance(Class cls) {
+	static id (*createInstance)(Class, size_t);
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		createInstance = (id (*)(Class, size_t))dlsym(RTLD_DEFAULT, "class_createInstance");
+	});
+	return createInstance != NULL ? createInstance(cls, 0) : nil;
+}
 
 static id VFLObjectForKey(id object, NSString *key) {
 	if (object == nil) {
@@ -285,15 +297,15 @@ static NSUInteger VFLFreeTouchIndex(NSUInteger occupied) {
 		CGPoint location = CGPointMake([entry[@"x"] doubleValue], [entry[@"y"] doubleValue]);
 		id (*makeTouch)(id, SEL, unsigned char, NSInteger, CGPoint, NSInteger, double) =
 			(id (*)(id, SEL, unsigned char, NSInteger, CGPoint, NSInteger, double))objc_msgSend;
-		// class_createInstance 不受 ARC 管理，+1 由下面的 CFRelease 平衡。
-		__unsafe_unretained id raw = class_createInstance(touchClass, 0);
-		__unsafe_unretained id touch = makeTouch(raw,
-												 NSSelectorFromString(@"initWithIndex:phase:location:swipeAim:timestamp:"),
-												 (unsigned char)[entry[@"index"] unsignedIntegerValue],
-												 [entry[@"phase"] integerValue],
-												 location,
-												 0,
-												 NSProcessInfo.processInfo.systemUptime);
+		// 私有初始化器只能用函数指针调用，括号里的 CFRelease 平衡 +1。
+		id raw = VFLAllocInstance(touchClass);
+		id touch = makeTouch(raw,
+							 NSSelectorFromString(@"initWithIndex:phase:location:swipeAim:timestamp:"),
+							 (unsigned char)[entry[@"index"] unsignedIntegerValue],
+							 [entry[@"phase"] integerValue],
+							 location,
+							 0,
+							 NSProcessInfo.processInfo.systemUptime);
 		if (touch != nil) {
 			[touchObjects addObject:touch];
 			CFRelease((__bridge CFTypeRef)touch);
@@ -304,10 +316,10 @@ static NSUInteger VFLFreeTouchIndex(NSUInteger occupied) {
 	}
 
 	id (*makeEvent)(id, SEL, id) = (id (*)(id, SEL, id))objc_msgSend;
-	__unsafe_unretained id rawEvent = class_createInstance(eventClass, 0);
-	__unsafe_unretained id multiTouchEvent = makeEvent(rawEvent,
-													   NSSelectorFromString(@"initWithTouches:"),
-													   touchObjects);
+	id rawEvent = VFLAllocInstance(eventClass);
+	id multiTouchEvent = makeEvent(rawEvent,
+								   NSSelectorFromString(@"initWithTouches:"),
+								   touchObjects);
 	if (multiTouchEvent == nil) {
 		return;
 	}
