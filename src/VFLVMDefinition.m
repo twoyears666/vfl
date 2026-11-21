@@ -173,8 +173,11 @@ NSString *VFLSocketPath(void) {
 		return NO;
 	}
 	NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:path];
-	BOOL ok = [handle truncateFileAtOffset:size];
+	// 稀疏文件：truncate 只改大小，不立刻占满存储。
+	[handle truncateFileAtOffset:size];
 	[handle closeFile];
+	NSDictionary *attributes = [NSFileManager.defaultManager attributesOfItemAtPath:path error:NULL];
+	BOOL ok = [attributes[NSFileSize] unsignedLongLongValue] == size;
 	if (!ok && error != NULL) {
 		*error = [NSError errorWithDomain:@"vfl" code:3
 								userInfo:@{ NSLocalizedDescriptionKey: @"无法调整磁盘镜像大小" }];
