@@ -268,9 +268,9 @@ static NSInteger VFLISOPathScore(NSString *path) {
 		}
 		return NO;
 	}
+	uint64_t remaining = candidate.length;
 	@try {
 		[handle seekToOffset:(unsigned long long)candidate.extent * VFLISOSectorSize error:NULL];
-		uint64_t remaining = candidate.length;
 		while (remaining > 0) {
 			NSUInteger chunk = (NSUInteger)MIN(remaining, (uint64_t)VFLISOChunkSize);
 			NSData *data = [handle readDataOfLength:chunk];
