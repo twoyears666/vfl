@@ -120,7 +120,6 @@
 	UISplitViewController *split = self.splitViewController;
 	if (split != nil) {
 		split.preferredDisplayMode = UISplitViewControllerDisplayModeSecondaryOnly;
-		split.preferredSplitBehavior = UISplitViewControllerSplitBehaviorDisjoint;
 	}
 	[self setNeedsStatusBarAppearanceUpdate];
 	[self connect];
@@ -153,7 +152,6 @@
 	UISplitViewController *split = self.splitViewController;
 	if (split != nil) {
 		split.preferredDisplayMode = UISplitViewControllerDisplayModeOneBesideSecondary;
-		split.preferredSplitBehavior = UISplitViewControllerSplitBehaviorTile;
 	}
 }
 
