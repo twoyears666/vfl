@@ -342,7 +342,9 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 		return NO;
 	}
 
-	_machine = [[VZVirtualMachine alloc] initWithConfiguration:configuration];
+	// 私有框架不能静态链接，必须运行时取类，否则 ld 找不到 _OBJC_CLASS_$_VZVirtualMachine。
+	_machine = [(VZVirtualMachine *)VFLAlloc(@"VZVirtualMachine")
+				initWithConfiguration:configuration];
 	[self startConsoleReaderWithDescriptor:guestToHost[0]];
 	[self startStatePolling];
 
