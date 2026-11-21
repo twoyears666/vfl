@@ -75,6 +75,7 @@ jobs:
           echo "$listing"
           grep -q 'var/jb/Applications/VFL.app/VFL' <<<"$listing"
           grep -q 'var/jb/Applications/VFL.app/Info.plist' <<<"$listing"
+          grep -q 'var/jb/Applications/VFL.app/logos/debian.png' <<<"$listing"
           grep -q 'var/jb/usr/bin/vfl' <<<"$listing"
           grep -q 'var/jb/Library/LaunchDaemons/com.twoyears666.vfl.daemon.plist' <<<"$listing"
           rm -rf /tmp/deb-control

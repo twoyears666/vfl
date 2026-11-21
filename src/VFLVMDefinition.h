@@ -25,6 +25,8 @@ FOUNDATION_EXPORT NSString *VFLSocketPath(void);
 @property (nonatomic, assign) unsigned long long memoryMB;
 @property (nonatomic, assign) NSUInteger cpuCount;
 @property (nonatomic, copy) NSString *commandLine;
+/// 发行版标识（alpine/debian/ubuntu/arch/fedora/linux），只影响界面图标。
+@property (nonatomic, copy) NSString *distroIdentifier;
 @property (nonatomic, assign) BOOL networkEnabled;
 @property (nonatomic, copy) NSString *macAddress;
 /// 显示设备数量。iPadOS 上 VZ 不提供画面视图，这个值只影响客户机配置。

@@ -3,9 +3,14 @@
 
 #import <UIKit/UIKit.h>
 
-/// 单台虚拟机的详情：配置、状态、启动/关机入口。
+NS_ASSUME_NONNULL_BEGIN
+
+/// 选中虚拟机的详情：状态、画面入口、系统/硬件/存储/显示/网络设置，以及启停操作。
 @interface VFLDetailViewController : UIViewController
 
-- (instancetype)initWithVMName:(NSString *)name;
+/// 当前展示的虚拟机名；设为 nil 显示空状态。
+@property (nonatomic, copy, nullable) NSString *vmName;
 
 @end
+
+NS_ASSUME_NONNULL_END

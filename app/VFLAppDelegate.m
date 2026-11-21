@@ -3,19 +3,14 @@
 
 #import "VFLAppDelegate.h"
 
-#import "VFLRootViewController.h"
+#import "VFLRootSplitViewController.h"
 
 @implementation VFLAppDelegate
 
 - (BOOL)application:(UIApplication *)application
 	didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
 	self.window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
-	VFLRootViewController *root =
-		[[VFLRootViewController alloc] initWithStyle:UITableViewStyleInsetGrouped];
-	UINavigationController *navigation =
-		[[UINavigationController alloc] initWithRootViewController:root];
-	navigation.navigationBar.prefersLargeTitles = YES;
-	self.window.rootViewController = navigation;
+	self.window.rootViewController = [[VFLRootSplitViewController alloc] init];
 	[self.window makeKeyAndVisible];
 	return YES;
 }

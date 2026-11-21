@@ -3,99 +3,78 @@
 
 #import "VFLDetailViewController.h"
 
+#import <math.h>
+
 #import "VFLClient.h"
-#import "VFLConsoleViewController.h"
+#import "VFLDashedPlaceholderView.h"
+#import "VFLFullScreenViewController.h"
 #import "VFLVMDefinition.h"
 
 @interface VFLDetailViewController ()
 
-@property (nonatomic, copy) NSString *vmName;
+@property (nonatomic, strong) UIScrollView *scrollView;
+@property (nonatomic, strong) UIStackView *stackView;
+
+@property (nonatomic, strong) VFLVMDefinition *definition;
 @property (nonatomic, copy) NSString *state;
-@property (nonatomic, strong) UILabel *stateLabel;
-@property (nonatomic, strong) UILabel *infoLabel;
-@property (nonatomic, strong) UIButton *startButton;
-@property (nonatomic, strong) UIButton *consoleButton;
-@property (nonatomic, strong) UIButton *shutdownButton;
-@property (nonatomic, strong) UIButton *killButton;
+@property (nonatomic, copy) NSString *statusMessage;
 @property (nonatomic, strong) NSTimer *refreshTimer;
+
+@property (nonatomic, strong) UILabel *cpuValueLabel;
+@property (nonatomic, strong) UILabel *memoryValueLabel;
+@property (nonatomic, strong) UILabel *statusLabel;
+@property (nonatomic, strong) UIButton *primaryButton;
 
 @end
 
 @implementation VFLDetailViewController
 
-- (instancetype)initWithVMName:(NSString *)name {
-	self = [super initWithNibName:nil bundle:nil];
-	if (self) {
-		_vmName = [name copy];
-		_state = @"unknown";
-	}
-	return self;
-}
-
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = self.vmName;
 	self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
 
-	UIScrollView *scrollView = [[UIScrollView alloc] init];
-	scrollView.translatesAutoresizingMaskIntoConstraints = NO;
-	scrollView.alwaysBounceVertical = YES;
-	[self.view addSubview:scrollView];
+	self.scrollView = [[UIScrollView alloc] init];
+	self.scrollView.translatesAutoresizingMaskIntoConstraints = NO;
+	self.scrollView.alwaysBounceVertical = YES;
+	self.scrollView.keyboardDismissMode = UIScrollViewKeyboardDismissModeOnDrag;
+	[self.view addSubview:self.scrollView];
 
-	UIStackView *stack = [[UIStackView alloc] init];
-	stack.axis = UILayoutConstraintAxisVertical;
-	stack.spacing = 12.0;
-	stack.translatesAutoresizingMaskIntoConstraints = NO;
-	[scrollView addSubview:stack];
-
-	self.stateLabel = [[UILabel alloc] init];
-	self.stateLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
-	self.stateLabel.text = @"读取状态…";
-
-	self.infoLabel = [[UILabel alloc] init];
-	self.infoLabel.font = [UIFont monospacedSystemFontOfSize:13.0 weight:UIFontWeightRegular];
-	self.infoLabel.numberOfLines = 0;
-	self.infoLabel.textColor = UIColor.secondaryLabelColor;
-
-	self.startButton = [self buttonWithTitle:@"启动" action:@selector(handleStart)];
-	self.consoleButton = [self buttonWithTitle:@"进入控制台" action:@selector(handleConsole)];
-	self.shutdownButton = [self buttonWithTitle:@"正常关机" action:@selector(handleShutdown)];
-	self.killButton = [self buttonWithTitle:@"强制关机" action:@selector(handleKill)];
-
-	for (UIView *view in @[ self.stateLabel, self.infoLabel, self.startButton,
-						   self.consoleButton, self.shutdownButton, self.killButton ]) {
-		[stack addArrangedSubview:view];
-	}
-	[stack setCustomSpacing:24.0 afterView:self.infoLabel];
+	self.stackView = [[UIStackView alloc] init];
+	self.stackView.translatesAutoresizingMaskIntoConstraints = NO;
+	self.stackView.axis = UILayoutConstraintAxisVertical;
+	self.stackView.spacing = 16.0;
+	[self.scrollView addSubview:self.stackView];
 
 	[NSLayoutConstraint activateConstraints:@[
-		[scrollView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
-		[scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-		[scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-		[scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+		[self.scrollView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
+		[self.scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+		[self.scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+		[self.scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
 
-		[stack.topAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.topAnchor constant:20.0],
-		[stack.leadingAnchor constraintEqualToAnchor:scrollView.frameLayoutGuide.leadingAnchor
-											constant:20.0],
-		[stack.trailingAnchor constraintEqualToAnchor:scrollView.frameLayoutGuide.trailingAnchor
-											 constant:-20.0],
-		[stack.bottomAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.bottomAnchor
-										   constant:-20.0],
+		[self.stackView.topAnchor constraintEqualToAnchor:self.scrollView.contentLayoutGuide.topAnchor
+												 constant:16.0],
+		[self.stackView.leadingAnchor constraintEqualToAnchor:self.scrollView.frameLayoutGuide.leadingAnchor
+													 constant:16.0],
+		[self.stackView.trailingAnchor constraintEqualToAnchor:self.scrollView.frameLayoutGuide.trailingAnchor
+													  constant:-16.0],
+		[self.stackView.bottomAnchor constraintEqualToAnchor:self.scrollView.contentLayoutGuide.bottomAnchor
+													constant:-24.0],
 	]];
 
-	[self loadDefinition];
-	[self refreshState];
+	[self rebuildContent];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	[self refreshState];
-	[self.refreshTimer invalidate];
-	self.refreshTimer = [NSTimer scheduledTimerWithTimeInterval:1.5
-														target:self
-													  selector:@selector(refreshState)
-													  userInfo:nil
-													   repeats:YES];
+	if (self.refreshTimer == nil && self.definition != nil) {
+		__weak typeof(self) weakSelf = self;
+		self.refreshTimer = [NSTimer scheduledTimerWithTimeInterval:2.0
+														   repeats:YES
+															 block:^(NSTimer *timer) {
+			[weakSelf refreshState];
+		}];
+	}
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -104,140 +83,589 @@
 	self.refreshTimer = nil;
 }
 
-- (UIButton *)buttonWithTitle:(NSString *)title action:(SEL)action {
-	UIButtonConfiguration *configuration = [UIButtonConfiguration filledButtonConfiguration];
-	configuration.title = title;
-	configuration.cornerStyle = UIButtonConfigurationCornerStyleMedium;
-	UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-	button.configuration = configuration;
-	[button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
-	[button.heightAnchor constraintEqualToConstant:46.0].active = YES;
-	return button;
-}
-
-#pragma mark - 配置
-
-- (void)loadDefinition {
-	VFLVMDefinition *definition = [[[VFLVMStore alloc] init] definitionNamed:self.vmName];
-	if (definition == nil) {
-		self.infoLabel.text = @"定义文件不见了。";
-		return;
+- (void)setVmName:(NSString *)vmName {
+	_vmName = [vmName copy];
+	self.definition = vmName.length > 0
+		? [[[VFLVMStore alloc] init] definitionNamed:vmName] : nil;
+	self.state = @"stopped";
+	self.statusMessage = @"";
+	self.title = vmName.length > 0 ? vmName : @"虚拟机";
+	if (self.isViewLoaded) {
+		[self rebuildContent];
+		[self refreshState];
 	}
-	NSMutableArray<NSString *> *lines = [NSMutableArray array];
-	[lines addObject:[NSString stringWithFormat:@"内核：%@", definition.kernelPath]];
-	if (definition.initrdPath.length > 0) {
-		[lines addObject:[NSString stringWithFormat:@"initrd：%@", definition.initrdPath]];
-	}
-	[lines addObject:[NSString stringWithFormat:@"内存：%llu MB · CPU：%lu · 显示：%lu",
-					  definition.memoryMB,
-					  (unsigned long)definition.cpuCount,
-					  (unsigned long)definition.displayCount]];
-	[lines addObject:[NSString stringWithFormat:@"网络：%@", definition.networkEnabled ? @"NAT" : @"关闭"]];
-	for (NSString *disk in definition.diskPaths) {
-		[lines addObject:[NSString stringWithFormat:@"磁盘：%@", disk]];
-	}
-	self.infoLabel.text = [lines componentsJoinedByString:@"\n"];
 }
 
 #pragma mark - 状态
 
+- (BOOL)isMachineActive {
+	return [self.state isEqualToString:@"starting"] || [self.state isEqualToString:@"running"];
+}
+
 - (void)refreshState {
-	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-		NSError *error = nil;
-		VFLClient *client = [VFLClient connectWithError:&error];
-		if (client == nil) {
-			[self applyState:@"unknown" message:error.localizedDescription ?: @"连不上守护进程"];
-			return;
-		}
-		NSDictionary *response = [client sendRequestWithCommand:@"list" vm:nil error:&error];
-		if (response == nil || ![response[@"ok"] boolValue]) {
-			[self applyState:@"unknown" message:response[@"error"] ?: error.localizedDescription];
-			return;
-		}
-		for (NSDictionary *item in response[@"vms"]) {
-			if ([item[@"name"] isEqualToString:self.vmName]) {
-				[self applyState:item[@"state"] ?: @"unknown" message:nil];
-				return;
-			}
-		}
-		[self applyState:@"unknown" message:@"守护进程里没有这台虚拟机"];
-	});
-}
-
-- (void)applyState:(NSString *)state message:(NSString *)message {
-	dispatch_async(dispatch_get_main_queue(), ^{
-		self.state = state;
-		NSString *text = [NSString stringWithFormat:@"状态：%@", state];
-		if (message.length > 0) {
-			text = [text stringByAppendingFormat:@"（%@）", message];
-		}
-		self.stateLabel.text = text;
-		self.stateLabel.textColor = [state isEqualToString:@"running"]
-			? UIColor.systemGreenColor : UIColor.labelColor;
-
-		BOOL running = [state isEqualToString:@"running"] || [state isEqualToString:@"starting"];
-		BOOL stopped = [state isEqualToString:@"stopped"] || [state isEqualToString:@"error"]
-			|| [state isEqualToString:@"unknown"];
-		self.startButton.enabled = stopped;
-		self.shutdownButton.enabled = running;
-		self.killButton.enabled = running;
-	});
-}
-
-#pragma mark - 命令
-
-- (void)sendCommand:(NSString *)command {
+	NSString *name = self.vmName;
+	if (name.length == 0) {
+		return;
+	}
 	dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
 		NSError *error = nil;
 		VFLClient *client = [VFLClient connectWithError:&error];
 		if (client == nil) {
-			[self presentError:error.localizedDescription ?: @"连不上守护进程"];
 			return;
 		}
-		NSDictionary *response = [client sendRequestWithCommand:command
-															 vm:self.vmName
-														  error:&error];
-		if (response == nil) {
-			[self presentError:error.localizedDescription ?: @"命令失败"];
-			return;
-		}
+		NSDictionary *response = [client sendRequestWithCommand:@"list" vm:nil error:&error];
+		[client close];
 		if (![response[@"ok"] boolValue]) {
-			[self presentError:response[@"error"] ?: @"命令失败"];
 			return;
 		}
-		[self refreshState];
+		NSString *state = nil;
+		for (NSDictionary *item in response[@"vms"]) {
+			if ([item[@"name"] isEqualToString:name]) {
+				state = item[@"state"];
+				break;
+			}
+		}
+		if (state == nil) {
+			return;
+		}
+		dispatch_async(dispatch_get_main_queue(), ^{
+			if (![state isEqualToString:self.state]) {
+				self.state = state;
+				[self rebuildContent];
+			}
+		});
 	});
 }
 
-- (void)handleStart {
-	[self sendCommand:@"start"];
+- (NSString *)stateText {
+	if ([self.state isEqualToString:@"running"]) {
+		return @"运行中";
+	}
+	if ([self.state isEqualToString:@"starting"]) {
+		return @"启动中";
+	}
+	if ([self.state isEqualToString:@"stopping"]) {
+		return @"关机中";
+	}
+	if ([self.state isEqualToString:@"error"]) {
+		return @"出错";
+	}
+	return @"已停止";
 }
 
-- (void)handleShutdown {
-	[self sendCommand:@"shutdown"];
+#pragma mark - 内容
+
+- (void)rebuildContent {
+	for (UIView *view in self.stackView.arrangedSubviews) {
+		[self.stackView removeArrangedSubview:view];
+		[view removeFromSuperview];
+	}
+
+	VFLVMDefinition *definition = self.definition;
+	if (definition == nil) {
+		UILabel *emptyLabel = [[UILabel alloc] init];
+		emptyLabel.text = @"在左侧选择一台虚拟机。";
+		emptyLabel.textColor = UIColor.secondaryLabelColor;
+		emptyLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+		[self.stackView addArrangedSubview:emptyLabel];
+		return;
+	}
+
+	if ([self isMachineActive]) {
+		[self.stackView addArrangedSubview:[self runningEntryCard]];
+	} else {
+		VFLDashedPlaceholderView *placeholder = [[VFLDashedPlaceholderView alloc] init];
+		placeholder.translatesAutoresizingMaskIntoConstraints = NO;
+		placeholder.text = @"点按启动虚拟机\n串口控制台会显示在独立的全屏页面里";
+		__weak typeof(self) weakSelf = self;
+		placeholder.onTap = ^{
+			[weakSelf startTapped];
+		};
+		[placeholder.heightAnchor constraintEqualToAnchor:placeholder.widthAnchor multiplier:0.75].active = YES;
+		[self.stackView addArrangedSubview:placeholder];
+	}
+
+	// 基本信息
+	[self.stackView addArrangedSubview:[self cardWithTitle:@"基本信息" rows:@[
+		[self rowWithTitle:@"名称" control:[self valueLabelWithText:definition.name]],
+		[self rowWithTitle:@"状态" control:[self valueLabelWithText:[self stateText]]],
+	]]];
+
+	// 系统
+	[self.stackView addArrangedSubview:[self cardWithTitle:@"系统" rows:@[
+		[self rowWithTitle:@"内核" control:[self textFieldWithPlaceholder:@"vmlinuz 路径"
+																	text:definition.kernelPath
+																  action:@selector(kernelPathChanged:)]],
+		[self rowWithTitle:@"初始内存盘" control:[self textFieldWithPlaceholder:@"可选"
+																			text:definition.initrdPath
+																		  action:@selector(initrdPathChanged:)]],
+		[self rowWithTitle:@"客户机架构" control:[self valueLabelWithText:@"arm64"]],
+		[self rowWithTitle:@"内核参数" control:[self textFieldWithPlaceholder:@"留空用默认串口参数"
+																		text:definition.commandLine
+																	  action:@selector(commandLineChanged:)]],
+	]]];
+
+	// 硬件
+	NSUInteger maximumMemoryMB = [self maximumGuestMemoryMB];
+	if (definition.memoryMB > maximumMemoryMB) {
+		definition.memoryMB = maximumMemoryMB;
+	}
+	self.cpuValueLabel = [self valueLabelWithText:
+		[NSString stringWithFormat:@"%lu 核", (unsigned long)definition.cpuCount]];
+	UISlider *cpuSlider = [self sliderWithMin:1.0
+										  max:8.0
+										value:(CGFloat)definition.cpuCount
+									   action:@selector(cpuSliderChanged:)];
+
+	self.memoryValueLabel = [self valueLabelWithText:
+		[NSString stringWithFormat:@"%llu MB", definition.memoryMB]];
+	UISlider *memorySlider = [self sliderWithMin:512.0
+											 max:(CGFloat)maximumMemoryMB
+										   value:(CGFloat)definition.memoryMB
+										  action:@selector(memorySliderChanged:)];
+
+	[self.stackView addArrangedSubview:[self cardWithTitle:@"硬件" rows:@[
+		[self blockRowWithTitle:@"CPU 核心数" control:cpuSlider valueLabel:self.cpuValueLabel],
+		[self blockRowWithTitle:@"内存" control:memorySlider valueLabel:self.memoryValueLabel],
+	]]];
+
+	// 存储
+	NSMutableArray<UIView *> *storageRows = [NSMutableArray array];
+	NSUInteger diskIndex = 0;
+	for (NSString *path in definition.diskPaths) {
+		BOOL readOnly = [definition.readOnlyDisks containsObject:@(diskIndex)];
+		NSString *title = diskIndex == 0 ? @"系统盘" : (readOnly ? @"只读盘" : @"磁盘");
+		NSString *value = [NSString stringWithFormat:@"%@ · %@",
+						   path.lastPathComponent, [self sizeTextForPath:path]];
+		[storageRows addObject:[self rowWithTitle:title control:[self valueLabelWithText:value]]];
+		diskIndex++;
+	}
+	UIButton *addDiskButton = [UIButton buttonWithType:UIButtonTypeSystem];
+	[addDiskButton setTitle:@"＋ 添加磁盘" forState:UIControlStateNormal];
+	addDiskButton.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+	[addDiskButton addTarget:self action:@selector(addDiskTapped) forControlEvents:UIControlEventTouchUpInside];
+	[storageRows addObject:addDiskButton];
+
+	UILabel *diskNote = [[UILabel alloc] init];
+	diskNote.text = @"磁盘镜像为稀疏文件；ISO 安装镜像作为只读盘排在其后。";
+	diskNote.numberOfLines = 0;
+	diskNote.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+	diskNote.textColor = UIColor.secondaryLabelColor;
+	[storageRows addObject:diskNote];
+
+	[self.stackView addArrangedSubview:[self cardWithTitle:@"存储" rows:storageRows]];
+
+	// 显示
+	UIButton *displayButton = [UIButton buttonWithType:UIButtonTypeSystem];
+	[displayButton setTitle:[NSString stringWithFormat:@"%lu 台", (unsigned long)definition.displayCount]
+				   forState:UIControlStateNormal];
+	displayButton.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+	displayButton.showsMenuAsPrimaryAction = YES;
+	displayButton.menu = [self displayMenu];
+
+	UILabel *displayNote = [[UILabel alloc] init];
+	displayNote.text = @"Virtualization.framework 在 iPadOS 上不提供客户机画面视图，"
+					   @"这里只配置客户机的显示设备数量（下次启动生效）。";
+	displayNote.numberOfLines = 0;
+	displayNote.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+	displayNote.textColor = UIColor.secondaryLabelColor;
+
+	[self.stackView addArrangedSubview:[self cardWithTitle:@"显示" rows:@[
+		[self rowWithTitle:@"显示设备" control:displayButton],
+		displayNote,
+	]]];
+
+	// 网络
+	UISwitch *network = [[UISwitch alloc] init];
+	network.on = definition.networkEnabled;
+	[network addTarget:self action:@selector(networkChanged:) forControlEvents:UIControlEventValueChanged];
+
+	[self.stackView addArrangedSubview:[self cardWithTitle:@"网络" rows:@[
+		[self rowWithTitle:@"NAT 网络" control:network],
+		[self rowWithTitle:@"MAC 地址" control:[self textFieldWithPlaceholder:@"52:54:00:12:34:56"
+																		text:definition.macAddress
+																	  action:@selector(macAddressChanged:)]],
+	]]];
+
+	// 启停
+	BOOL active = [self isMachineActive];
+	self.primaryButton = [UIButton buttonWithType:UIButtonTypeSystem];
+	self.primaryButton.translatesAutoresizingMaskIntoConstraints = NO;
+	[self.primaryButton setTitle:(active ? @"停止虚拟机" : @"启动虚拟机") forState:UIControlStateNormal];
+	self.primaryButton.titleLabel.font = [UIFont systemFontOfSize:17.0 weight:UIFontWeightSemibold];
+	[self.primaryButton setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+	self.primaryButton.backgroundColor = active ? UIColor.systemRedColor : self.view.tintColor;
+	self.primaryButton.layer.cornerRadius = 12.0;
+	[self.primaryButton addTarget:self action:@selector(startTapped) forControlEvents:UIControlEventTouchUpInside];
+	[self.primaryButton.heightAnchor constraintEqualToConstant:50.0].active = YES;
+	[self.stackView addArrangedSubview:self.primaryButton];
+
+	if (active) {
+		UIStackView *row = [[UIStackView alloc] init];
+		row.axis = UILayoutConstraintAxisHorizontal;
+		row.spacing = 12.0;
+		row.distribution = UIStackViewDistributionFillEqually;
+
+		UIButton *killButton = [UIButton buttonWithType:UIButtonTypeSystem];
+		[killButton setTitle:@"强制关机" forState:UIControlStateNormal];
+		[killButton setTitleColor:UIColor.systemRedColor forState:UIControlStateNormal];
+		[killButton addTarget:self action:@selector(killTapped) forControlEvents:UIControlEventTouchUpInside];
+
+		UIButton *consoleButton = [UIButton buttonWithType:UIButtonTypeSystem];
+		[consoleButton setTitle:@"进入控制台" forState:UIControlStateNormal];
+		[consoleButton addTarget:self action:@selector(enterConsoleTapped) forControlEvents:UIControlEventTouchUpInside];
+
+		[row addArrangedSubview:killButton];
+		[row addArrangedSubview:consoleButton];
+		[self.stackView addArrangedSubview:row];
+	}
+
+	self.statusLabel = [[UILabel alloc] init];
+	self.statusLabel.numberOfLines = 0;
+	self.statusLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+	self.statusLabel.textColor = UIColor.secondaryLabelColor;
+	self.statusLabel.text = self.statusMessage.length > 0 ? self.statusMessage : [self stateText];
+	[self.stackView addArrangedSubview:self.statusLabel];
 }
 
-- (void)handleKill {
-	[self sendCommand:@"kill"];
+#pragma mark - 控件构造
+
+- (UILabel *)valueLabelWithText:(NSString *)text {
+	UILabel *label = [[UILabel alloc] init];
+	label.text = text;
+	label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
+	label.textColor = UIColor.secondaryLabelColor;
+	label.textAlignment = NSTextAlignmentRight;
+	[label setContentCompressionResistancePriority:UILayoutPriorityDefaultLow
+										   forAxis:UILayoutConstraintAxisHorizontal];
+	return label;
 }
 
-- (void)handleConsole {
-	VFLConsoleViewController *console =
-		[[VFLConsoleViewController alloc] initWithVMName:self.vmName];
-	[self.navigationController pushViewController:console animated:YES];
+- (UIView *)cardWithTitle:(NSString *)title rows:(NSArray<UIView *> *)rows {
+	UIView *card = [[UIView alloc] init];
+	card.translatesAutoresizingMaskIntoConstraints = NO;
+	card.backgroundColor = UIColor.secondarySystemGroupedBackgroundColor;
+	card.layer.cornerRadius = 14.0;
+
+	UIStackView *inner = [[UIStackView alloc] init];
+	inner.translatesAutoresizingMaskIntoConstraints = NO;
+	inner.axis = UILayoutConstraintAxisVertical;
+	inner.spacing = 12.0;
+
+	UILabel *titleLabel = [[UILabel alloc] init];
+	titleLabel.text = title;
+	titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+	titleLabel.textColor = UIColor.labelColor;
+	[inner addArrangedSubview:titleLabel];
+	for (UIView *row in rows) {
+		[inner addArrangedSubview:row];
+	}
+	[card addSubview:inner];
+
+	[NSLayoutConstraint activateConstraints:@[
+		[inner.topAnchor constraintEqualToAnchor:card.topAnchor constant:16.0],
+		[inner.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:16.0],
+		[inner.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-16.0],
+		[inner.bottomAnchor constraintEqualToAnchor:card.bottomAnchor constant:-16.0],
+	]];
+	return card;
 }
 
-- (void)presentError:(NSString *)message {
-	dispatch_async(dispatch_get_main_queue(), ^{
-		UIAlertController *alert =
-			[UIAlertController alertControllerWithTitle:nil
-												message:message
-										 preferredStyle:UIAlertControllerStyleAlert];
-		[alert addAction:[UIAlertAction actionWithTitle:@"好"
-												  style:UIAlertActionStyleDefault
-												handler:nil]];
-		[self presentViewController:alert animated:YES completion:nil];
+- (UIView *)rowWithTitle:(NSString *)title control:(UIView *)control {
+	UIStackView *row = [[UIStackView alloc] init];
+	row.axis = UILayoutConstraintAxisHorizontal;
+	row.alignment = UIStackViewAlignmentCenter;
+	row.spacing = 12.0;
+
+	UILabel *label = [[UILabel alloc] init];
+	label.text = title;
+	label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+	label.textColor = UIColor.labelColor;
+	[label setContentHuggingPriority:UILayoutPriorityDefaultHigh forAxis:UILayoutConstraintAxisHorizontal];
+
+	[control setContentHuggingPriority:UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisHorizontal];
+	[control setContentCompressionResistancePriority:UILayoutPriorityRequired
+											 forAxis:UILayoutConstraintAxisHorizontal];
+
+	[row addArrangedSubview:label];
+	[row addArrangedSubview:control];
+	return row;
+}
+
+- (UIView *)blockRowWithTitle:(NSString *)title control:(UIView *)control valueLabel:(UILabel *)valueLabel {
+	UIStackView *header = [[UIStackView alloc] init];
+	header.axis = UILayoutConstraintAxisHorizontal;
+	header.alignment = UIStackViewAlignmentCenter;
+	header.spacing = 8.0;
+
+	UILabel *label = [[UILabel alloc] init];
+	label.text = title;
+	label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+	label.textColor = UIColor.labelColor;
+	[header addArrangedSubview:label];
+
+	UIView *spacer = [[UIView alloc] init];
+	[spacer setContentHuggingPriority:UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisHorizontal];
+	[header addArrangedSubview:spacer];
+
+	if (valueLabel != nil) {
+		[header addArrangedSubview:valueLabel];
+	}
+
+	UIStackView *column = [[UIStackView alloc] initWithArrangedSubviews:@[ header, control ]];
+	column.axis = UILayoutConstraintAxisVertical;
+	column.spacing = 8.0;
+	return column;
+}
+
+- (UITextField *)textFieldWithPlaceholder:(NSString *)placeholder text:(NSString *)text action:(SEL)action {
+	UITextField *field = [[UITextField alloc] init];
+	field.placeholder = placeholder;
+	field.text = text;
+	field.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+	field.textColor = UIColor.secondaryLabelColor;
+	field.textAlignment = NSTextAlignmentRight;
+	field.borderStyle = UITextBorderStyleNone;
+	field.clearButtonMode = UITextFieldViewModeWhileEditing;
+	field.returnKeyType = UIReturnKeyDone;
+	field.autocorrectionType = UITextAutocorrectionTypeNo;
+	field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+	[field addTarget:self action:action forControlEvents:UIControlEventEditingChanged];
+	return field;
+}
+
+- (UISlider *)sliderWithMin:(CGFloat)minimum max:(CGFloat)maximum value:(CGFloat)value action:(SEL)action {
+	UISlider *slider = [[UISlider alloc] init];
+	slider.minimumValue = (float)minimum;
+	slider.maximumValue = (float)maximum;
+	slider.value = (float)value;
+	[slider addTarget:self action:action forControlEvents:UIControlEventValueChanged];
+	return slider;
+}
+
+- (NSUInteger)maximumGuestMemoryMB {
+	unsigned long long physical = NSProcessInfo.processInfo.physicalMemory;
+	unsigned long long bytes = physical * 3ULL / 4ULL;
+	if (physical > 1024ULL * 1024ULL * 1024ULL) {
+		bytes = MIN(bytes, physical - 1024ULL * 1024ULL * 1024ULL);
+	}
+	return (NSUInteger)MAX(512ULL, bytes / (1024ULL * 1024ULL));
+}
+
+- (NSString *)sizeTextForPath:(NSString *)path {
+	NSDictionary *attributes = [NSFileManager.defaultManager attributesOfItemAtPath:path error:NULL];
+	unsigned long long size = [attributes[NSFileSize] unsignedLongLongValue];
+	if (size == 0) {
+		return @"不存在";
+	}
+	double gigabytes = (double)size / (1024.0 * 1024.0 * 1024.0);
+	return [NSString stringWithFormat:@"%.0f GB", MAX(1.0, round(gigabytes))];
+}
+
+- (UIMenu *)displayMenu {
+	__weak typeof(self) weakSelf = self;
+	NSMutableArray<UIAction *> *actions = [NSMutableArray array];
+	for (NSUInteger count = 1; count <= 4; count++) {
+		UIAction *action = [UIAction actionWithTitle:[NSString stringWithFormat:@"%lu 台", (unsigned long)count]
+											  image:nil
+										 identifier:nil
+											handler:^(__kindof UIAction *selected) {
+			weakSelf.definition.displayCount = count;
+			[weakSelf saveDefinition];
+			[weakSelf rebuildContent];
+		}];
+		action.state = weakSelf.definition.displayCount == count ? UIMenuElementStateOn : UIMenuElementStateOff;
+		[actions addObject:action];
+	}
+	return [UIMenu menuWithTitle:@"显示设备" children:actions];
+}
+
+- (UIView *)runningEntryCard {
+	UILabel *status = [[UILabel alloc] init];
+	status.text = self.statusMessage.length > 0 ? self.statusMessage : [self stateText];
+	status.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
+	status.textColor = UIColor.secondaryLabelColor;
+	status.numberOfLines = 0;
+	[status setContentCompressionResistancePriority:UILayoutPriorityDefaultLow
+											forAxis:UILayoutConstraintAxisHorizontal];
+
+	UIButton *enterButton = [UIButton buttonWithType:UIButtonTypeSystem];
+	[enterButton setTitle:@"进入控制台" forState:UIControlStateNormal];
+	enterButton.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+	[enterButton addTarget:self action:@selector(enterConsoleTapped) forControlEvents:UIControlEventTouchUpInside];
+	[enterButton setContentHuggingPriority:UILayoutPriorityRequired
+								   forAxis:UILayoutConstraintAxisHorizontal];
+
+	UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[ status, enterButton ]];
+	row.axis = UILayoutConstraintAxisHorizontal;
+	row.alignment = UIStackViewAlignmentCenter;
+	row.spacing = 12.0;
+
+	return [self cardWithTitle:@"虚拟机运行中" rows:@[ row ]];
+}
+
+#pragma mark - 设置变更
+
+- (void)saveDefinition {
+	NSError *error = nil;
+	if (![[[VFLVMStore alloc] init] saveDefinition:self.definition error:&error]) {
+		[self presentMessage:@"保存失败" detail:error.localizedDescription ?: @"定义写不进去"];
+	}
+}
+
+- (void)kernelPathChanged:(UITextField *)sender {
+	self.definition.kernelPath = sender.text;
+	[self saveDefinition];
+}
+
+- (void)initrdPathChanged:(UITextField *)sender {
+	self.definition.initrdPath = sender.text;
+	[self saveDefinition];
+}
+
+- (void)commandLineChanged:(UITextField *)sender {
+	self.definition.commandLine = sender.text;
+	[self saveDefinition];
+}
+
+- (void)macAddressChanged:(UITextField *)sender {
+	self.definition.macAddress = sender.text;
+	[self saveDefinition];
+}
+
+- (void)networkChanged:(UISwitch *)sender {
+	self.definition.networkEnabled = sender.isOn;
+	[self saveDefinition];
+}
+
+- (void)cpuSliderChanged:(UISlider *)sender {
+	NSUInteger cores = (NSUInteger)MAX(1.0, roundf(sender.value));
+	sender.value = (float)cores;
+	self.definition.cpuCount = cores;
+	self.cpuValueLabel.text = [NSString stringWithFormat:@"%lu 核", (unsigned long)cores];
+	[self saveDefinition];
+}
+
+- (void)memorySliderChanged:(UISlider *)sender {
+	unsigned long long megabytes =
+		(unsigned long long)(MAX(512.0, roundf(sender.value / 512.0)) * 512.0);
+	sender.value = (float)megabytes;
+	self.definition.memoryMB = megabytes;
+	self.memoryValueLabel.text = [NSString stringWithFormat:@"%llu MB", megabytes];
+	[self saveDefinition];
+}
+
+- (void)addDiskTapped {
+	NSUInteger index = self.definition.diskPaths.count;
+	NSString *fileName = [NSString stringWithFormat:@"%@-%lu.img", self.definition.name,
+													   (unsigned long)index];
+	NSString *path = [VFLDisksDirectory() stringByAppendingPathComponent:fileName];
+	NSError *error = nil;
+	[NSFileManager.defaultManager createDirectoryAtPath:VFLDisksDirectory()
+						   withIntermediateDirectories:YES
+											attributes:nil
+												 error:NULL];
+	if (![VFLVMStore createDiskImageAtPath:path sizeInGB:8 error:&error]) {
+		[self presentMessage:@"添加磁盘失败" detail:error.localizedDescription ?: @"镜像创建失败"];
+		return;
+	}
+	self.definition.diskPaths = [self.definition.diskPaths arrayByAddingObject:path];
+	[self saveDefinition];
+	[self rebuildContent];
+}
+
+#pragma mark - 启停
+
+- (void)startTapped {
+	if ([self isMachineActive]) {
+		[self sendCommand:@"shutdown" successMessage:@"正在请求关机…" completion:nil];
+		return;
+	}
+	NSString *name = self.vmName;
+	[self sendCommand:@"start" successMessage:@"正在启动…" completion:^(BOOL ok) {
+		if (ok && name.length > 0) {
+			[self presentConsoleForVMNamed:name];
+		}
+	}];
+}
+
+- (void)killTapped {
+	[self sendCommand:@"kill" successMessage:@"已强制关机" completion:nil];
+}
+
+- (void)enterConsoleTapped {
+	if (self.vmName.length > 0) {
+		[self presentConsoleForVMNamed:self.vmName];
+	}
+}
+
+- (void)sendCommand:(NSString *)command
+	  successMessage:(NSString *)successMessage
+		  completion:(void (^)(BOOL ok))completion {
+	NSString *name = self.vmName;
+	if (name.length == 0) {
+		return;
+	}
+	self.statusLabel.text = @"正在处理…";
+	dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+		NSError *error = nil;
+		VFLClient *client = [VFLClient connectWithError:&error];
+		if (client == nil) {
+			dispatch_async(dispatch_get_main_queue(), ^{
+				[self presentMessage:@"连不上守护进程"
+							  detail:@"请确认 VFL 已正确安装并重启过设备。"];
+				if (completion != nil) {
+					completion(NO);
+				}
+			});
+			return;
+		}
+		NSDictionary *response = [client sendRequestWithCommand:command vm:name error:&error];
+		[client close];
+		BOOL ok = [response[@"ok"] boolValue];
+		dispatch_async(dispatch_get_main_queue(), ^{
+			if (!ok) {
+				NSString *detail = response[@"error"] ?: error.localizedDescription ?: @"命令失败";
+				[self presentMessage:@"操作失败" detail:detail];
+				self.statusLabel.text = detail;
+			} else {
+				self.statusMessage = successMessage;
+				self.statusLabel.text = successMessage;
+				[self refreshState];
+			}
+			if (completion != nil) {
+				completion(ok);
+			}
+		});
 	});
+}
+
+- (void)presentConsoleForVMNamed:(NSString *)name {
+	VFLFullScreenViewController *controller =
+		[[VFLFullScreenViewController alloc] initWithVMName:name
+												displayCount:self.definition.displayCount];
+	__weak typeof(self) weakSelf = self;
+	controller.dismissHandler = ^{
+		[weakSelf refreshState];
+	};
+	if (self.navigationController != nil) {
+		[self.navigationController pushViewController:controller animated:YES];
+	} else {
+		[self presentViewController:controller animated:YES completion:nil];
+	}
+}
+
+- (void)presentMessage:(NSString *)title detail:(NSString *)detail {
+	if ([self.presentedViewController isKindOfClass:UIAlertController.class]) {
+		return;
+	}
+	UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
+																  message:detail
+														   preferredStyle:UIAlertControllerStyleAlert];
+	[alert addAction:[UIAlertAction actionWithTitle:@"知道了"
+											  style:UIAlertActionStyleDefault
+											handler:nil]];
+	[self presentViewController:alert animated:YES completion:nil];
 }
 
 @end

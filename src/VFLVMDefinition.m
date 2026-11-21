@@ -45,6 +45,7 @@ NSString *VFLSocketPath(void) {
 	definition.memoryMB = [dictionary[@"memoryMB"] unsignedLongLongValue] ?: 2048;
 	definition.cpuCount = [dictionary[@"cpuCount"] unsignedIntegerValue] ?: 2;
 	definition.commandLine = dictionary[@"commandLine"] ?: @"";
+	definition.distroIdentifier = dictionary[@"distro"] ?: @"linux";
 	definition.networkEnabled = [dictionary[@"network"] boolValue];
 	definition.macAddress = dictionary[@"mac"] ?: @"";
 	definition.displayCount = [dictionary[@"displays"] unsignedIntegerValue] ?: 1;
@@ -61,6 +62,7 @@ NSString *VFLSocketPath(void) {
 		@"memoryMB": @(self.memoryMB),
 		@"cpuCount": @(self.cpuCount),
 		@"commandLine": self.commandLine,
+		@"distro": self.distroIdentifier ?: @"linux",
 		@"network": @(self.networkEnabled),
 		@"mac": self.macAddress,
 		@"displays": @(self.displayCount),
