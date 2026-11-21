@@ -24,7 +24,7 @@ VFL_FILES = $(wildcard app/*.m) \
 VFL_FRAMEWORKS = UIKit Foundation UniformTypeIdentifiers
 VFL_CFLAGS = -fobjc-arc -Wall -Isrc
 VFL_CODESIGN_FLAGS = -Sentitlements.plist
-# 自带 VZ 框架由 tools/build-vz-frameworks.sh 在本机生成，不入库。
+# 自带 VZ 运行时由 tools/fetch-vz-frameworks.sh 下载组装（CI 也会跑），不入库。
 VFL_RESOURCE_DIRS = Resources $(wildcard vendor/app)
 VFL_INSTALL_PATH = /Applications
 include $(THEOS_MAKE_PATH)/application.mk

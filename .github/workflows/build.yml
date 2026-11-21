@@ -61,6 +61,13 @@ jobs:
           git clone --recursive --depth=1 https://github.com/theos/theos.git "$THEOS"
           echo "$THEOS/bin" >> "$GITHUB_PATH"
 
+      - name: 准备 VZ 私有运行时
+        run: |
+          ./tools/fetch-vz-frameworks.sh
+          test -f vendor/app/Frameworks/Virtualization.framework/Virtualization
+          test -f vendor/app/VZHostCompat.dylib
+          test -f vendor/app/VirtualMachine.xpc/Contents/MacOS/com.apple.Virtualization.VirtualMachine
+
       - name: 编译并打包 rootless deb
         run: make package FINALPACKAGE=1
 
@@ -76,6 +83,9 @@ jobs:
           grep -q 'var/jb/Applications/VFL.app/VFL' <<<"$listing"
           grep -q 'var/jb/Applications/VFL.app/Info.plist' <<<"$listing"
           grep -q 'var/jb/Applications/VFL.app/logos/debian.png' <<<"$listing"
+          grep -q 'var/jb/Applications/VFL.app/Frameworks/Virtualization.framework/Versions/A/Virtualization' <<<"$listing"
+          grep -q 'var/jb/Applications/VFL.app/VZHostCompat.dylib' <<<"$listing"
+          grep -q 'var/jb/Applications/VFL.app/VirtualMachine.xpc/Contents/MacOS/com.apple.Virtualization.VirtualMachine' <<<"$listing"
           grep -q 'var/jb/usr/bin/vfl' <<<"$listing"
           grep -q 'var/jb/Library/LaunchDaemons/com.twoyears666.vfl.daemon.plist' <<<"$listing"
           rm -rf /tmp/deb-control
