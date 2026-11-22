@@ -109,7 +109,7 @@ NSString *VFLSocketPath(void) {
 	if (self.commandLine.length > 0) {
 		return self.commandLine;
 	}
-	return @"console=ttyAMA0,115200 earlycon=pl011,0x09000000 loglevel=7 panic=1";
+	return @"console=hvc0 console=ttyAMA0 loglevel=7 panic=1";
 }
 
 @end
