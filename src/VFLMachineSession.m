@@ -403,22 +403,17 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 
 	configuration.entropyDevices = @[ VFLNewInstance(VZVirtioEntropyDeviceConfiguration) ];
 
-	// 多显示设备：只有系统里真的有 virtio-gpu 类时才配，缺类就跳过（iPadOS 上通常没有）。
+	// 这台 VZ 只允许一个 scanout（多配会报 "More than one scanout is configured."）。
+	// 多显示设备先按单屏处理，等确认固件能把画面跑起来再谈切换。
 	if (definition.displayCount > 0
 		&& NSClassFromString(@"VZVirtioGraphicsDeviceConfiguration") != nil
 		&& NSClassFromString(@"VZVirtioGraphicsScanoutConfiguration") != nil) {
-		NSMutableArray *scanouts = [NSMutableArray array];
-		for (NSUInteger index = 0; index < definition.displayCount; index++) {
-			id scanout = [[NSClassFromString(@"VZVirtioGraphicsScanoutConfiguration") alloc]
-						  initWithWidthInPixels:1280 heightInPixels:800];
-			if (scanout != nil) {
-				[scanouts addObject:scanout];
-			}
-		}
-		if (scanouts.count > 0) {
+		id scanout = [[NSClassFromString(@"VZVirtioGraphicsScanoutConfiguration") alloc]
+					  initWithWidthInPixels:1280 heightInPixels:800];
+		if (scanout != nil) {
 			VZVirtioGraphicsDeviceConfiguration *graphics =
 				VFLNewInstance(VZVirtioGraphicsDeviceConfiguration);
-			graphics.scanouts = scanouts;
+			graphics.scanouts = @[ scanout ];
 			configuration.graphicsDevices = @[ graphics ];
 		}
 	}

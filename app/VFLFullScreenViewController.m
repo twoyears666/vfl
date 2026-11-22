@@ -272,6 +272,7 @@
 
 	self.displayView = display;
 	self.displayCount = MAX(self.displayCount, display.displayCount);
+	NSLog(@"[VFL] 画面视图已挂载，framebuffer 数：%lu", (unsigned long)display.displayCount);
 	[self setDisplayActive:YES];
 	[self rebuildControlMenu];
 }
