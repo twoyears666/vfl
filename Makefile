@@ -21,7 +21,7 @@ VFL_FILES = $(wildcard app/*.m) \
             src/VFLISOExtractor.m \
             src/VFLTerminalEmulator.m \
             src/VFLTerminalView.m
-VFL_FRAMEWORKS = UIKit Foundation UniformTypeIdentifiers AVFoundation
+VFL_FRAMEWORKS = UIKit Foundation UniformTypeIdentifiers
 VFL_CFLAGS = -fobjc-arc -Wall -Isrc
 VFL_CODESIGN_FLAGS = -Sentitlements.plist
 # 自带 VZ 运行时由 tools/fetch-vz-frameworks.sh 下载组装（CI 也会跑），不入库。

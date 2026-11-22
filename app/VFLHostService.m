@@ -48,16 +48,4 @@
 	return [self.server sessionNamed:name];
 }
 
-- (BOOL)hasActiveSession {
-	if (!self.hosting) {
-		return NO;
-	}
-	for (VFLMachineSession *session in self.server.sessions) {
-		if (session.isActive) {
-			return YES;
-		}
-	}
-	return NO;
-}
-
 @end

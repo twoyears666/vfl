@@ -7,7 +7,6 @@
 #import <signal.h>
 #import <stdio.h>
 
-#import "VFLBackgroundKeeper.h"
 #import "VFLHostService.h"
 #import "VFLRootSplitViewController.h"
 #import "VFLVMDefinition.h"
@@ -57,27 +56,6 @@ static void VFLInstallCrashHandlers(void) {
 	self.window.rootViewController = [[VFLRootSplitViewController alloc] init];
 	[self.window makeKeyAndVisible];
 	return YES;
-}
-
-/// 有虚拟机在跑时用静音音频把进程留在后台，否则挂起会把 VMM 一起停掉。
-- (void)applicationDidEnterBackground:(UIApplication *)application {
-	if ([[VFLHostService shared] hasActiveSession]) {
-		// 音频激活本身需要一点时间，先用后台任务把这段窗口撑住。
-		self.backgroundTask = [application beginBackgroundTaskWithName:@"VFL 虚拟机保活"
-														expirationHandler:^{
-			[application endBackgroundTask:self.backgroundTask];
-			self.backgroundTask = UIBackgroundTaskInvalid;
-		}];
-		[[VFLBackgroundKeeper shared] start];
-	}
-}
-
-- (void)applicationWillEnterForeground:(UIApplication *)application {
-	[[VFLBackgroundKeeper shared] stop];
-	if (self.backgroundTask != UIBackgroundTaskInvalid) {
-		[application endBackgroundTask:self.backgroundTask];
-		self.backgroundTask = UIBackgroundTaskInvalid;
-	}
 }
 
 /// App 不在 Xcode 下运行时 NSLog 走 stderr；重定向到 Media/VFL/app.log 方便事后排查。
