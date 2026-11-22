@@ -421,16 +421,22 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 		[(VZFileHandleSerialPortAttachment *)VFLAlloc(@"VZFileHandleSerialPortAttachment")
 		 initWithFileHandleForReading:reading
 				 fileHandleForWriting:writing];
-	// 串口硬件优先用传统 VZSerialPortConfiguration（独立的 PL011 UART）：
-	// EFI 固件阶段还没有 virtio 驱动，它只会往固定地址的 UART 打日志；
-	// 只配 virtio-console 时固件第一次读写 MMIO 就扑空（0x20000000 死循环）。
-	Class legacyPortClass = NSClassFromString(@"VZSerialPortConfiguration");
+	// 串口硬件优先用 PL011（固定地址的独立 UART）：EFI 固件阶段没有 virtio 驱动，
+	// 只能靠它打印。VZSerialPortConfiguration 是抽象基类，具体实现叫
+	// _VZPL011SerialPortConfiguration；直接实例化基类会抛 "Create a concrete instance"。
+	Class pl011PortClass = NSClassFromString(@"_VZPL011SerialPortConfiguration");
 	id serialPort = nil;
-	if (legacyPortClass != Nil) {
-		serialPort = [(id)[legacyPortClass alloc] init];
-		[serialPort setValue:attachment forKey:@"attachment"];
-		NSLog(@"[VFL] 串口使用传统 PL011：VZSerialPortConfiguration");
-	} else {
+	if (pl011PortClass != Nil) {
+		@try {
+			serialPort = [(id)[pl011PortClass alloc] init];
+			[serialPort setValue:attachment forKey:@"attachment"];
+			NSLog(@"[VFL] 串口使用 PL011（_VZPL011SerialPortConfiguration）");
+		} @catch (NSException *exception) {
+			NSLog(@"[VFL] PL011 串口创建失败：%@", exception.reason);
+			serialPort = nil;
+		}
+	}
+	if (serialPort == nil) {
 		Class virtioPortClass = NSClassFromString(@"VZVirtioConsoleDeviceSerialPortConfiguration");
 		if (virtioPortClass != Nil) {
 			serialPort = [(id)[virtioPortClass alloc] init];
