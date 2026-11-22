@@ -5,6 +5,7 @@
 
 #import <errno.h>
 #import <fcntl.h>
+#import <limits.h>
 #import <string.h>
 #import <unistd.h>
 
@@ -12,6 +13,8 @@
 #import "VFLVMDefinition.h"
 
 static const NSUInteger VFLConsoleBufferLimit = 256 * 1024;
+/// 控制台日志落盘上限，超出后不再追加，避免把 Media 写满。
+static const unsigned long long VFLConsoleLogLimit = 8ULL * 1024 * 1024;
 
 NSString *VFLMachineStateText(VFLMachineState state) {
 	switch (state) {
@@ -38,6 +41,9 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 	dispatch_source_t _consoleSource;
 
 	NSMutableData *_consoleBuffer;
+	/// 控制台输出同时落盘，方便直接把文件发出来，不用截图。
+	NSFileHandle *_consoleLog;
+	unsigned long long _consoleLogBytes;
 	NSMutableArray<id<VFLSessionObserver>> *_observers;
 	NSRecursiveLock *_lock;
 	dispatch_source_t _stateTimer;
@@ -145,6 +151,21 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 	NSArray *observers = nil;
 	[_lock lock];
 	[_consoleBuffer appendData:data];
+	if (_consoleLog != nil) {
+		if (_consoleLogBytes < VFLConsoleLogLimit) {
+			@try {
+				[_consoleLog writeData:data];
+				_consoleLogBytes += data.length;
+			} @catch (NSException *exception) {
+				NSLog(@"[VFL] 控制台日志写入失败：%@", exception.reason);
+				[_consoleLog closeFile];
+				_consoleLog = nil;
+			}
+		} else if (_consoleLogBytes != ULLONG_MAX) {
+			_consoleLogBytes = ULLONG_MAX;
+			NSLog(@"[VFL] 控制台日志已达 %llu 字节上限，停止写入", VFLConsoleLogLimit);
+		}
+	}
 	if (_consoleBuffer.length > VFLConsoleBufferLimit) {
 		NSUInteger excess = _consoleBuffer.length - VFLConsoleBufferLimit;
 		[_consoleBuffer replaceBytesInRange:NSMakeRange(0, excess) withBytes:NULL length:0];
@@ -204,6 +225,10 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 		close(_consoleWriteFD);
 		_consoleWriteFD = -1;
 	}
+	if (_consoleLog != nil) {
+		[_consoleLog closeFile];
+		_consoleLog = nil;
+	}
 	[_lock unlock];
 }
 
@@ -257,7 +282,14 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 	[self closeConsolePipes];
 	[_lock lock];
 	[_consoleBuffer setLength:0];
+	NSString *consoleLogName = [definition.name stringByReplacingOccurrencesOfString:@"/" withString:@"_"];
+	NSString *consoleLogPath = [VFLDataDirectory() stringByAppendingPathComponent:
+		[NSString stringWithFormat:@"console-%@.log", consoleLogName]];
+	[NSFileManager.defaultManager createFileAtPath:consoleLogPath contents:nil attributes:nil];
+	_consoleLog = [NSFileHandle fileHandleForWritingAtPath:consoleLogPath];
+	_consoleLogBytes = 0;
 	[_lock unlock];
+	NSLog(@"[VFL] 控制台输出同时写入 %@", consoleLogPath);
 
 	VZVirtualMachineConfiguration *configuration = VFLNewInstance(VZVirtualMachineConfiguration);
 	configuration.CPUCount = MAX((NSUInteger)1, definition.cpuCount);
@@ -389,10 +421,24 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 		[(VZFileHandleSerialPortAttachment *)VFLAlloc(@"VZFileHandleSerialPortAttachment")
 		 initWithFileHandleForReading:reading
 				 fileHandleForWriting:writing];
-	VZVirtioConsoleDeviceSerialPortConfiguration *serialPort =
-		VFLNewInstance(VZVirtioConsoleDeviceSerialPortConfiguration);
-	serialPort.attachment = attachment;
-	configuration.serialPorts = @[ serialPort ];
+	// 串口硬件优先用传统 VZSerialPortConfiguration（独立的 PL011 UART）：
+	// EFI 固件阶段还没有 virtio 驱动，它只会往固定地址的 UART 打日志；
+	// 只配 virtio-console 时固件第一次读写 MMIO 就扑空（0x20000000 死循环）。
+	Class legacyPortClass = NSClassFromString(@"VZSerialPortConfiguration");
+	id serialPort = nil;
+	if (legacyPortClass != Nil) {
+		serialPort = [(id)[legacyPortClass alloc] init];
+		[serialPort setValue:attachment forKey:@"attachment"];
+		NSLog(@"[VFL] 串口使用传统 PL011：VZSerialPortConfiguration");
+	} else {
+		Class virtioPortClass = NSClassFromString(@"VZVirtioConsoleDeviceSerialPortConfiguration");
+		if (virtioPortClass != Nil) {
+			serialPort = [(id)[virtioPortClass alloc] init];
+			[serialPort setValue:attachment forKey:@"attachment"];
+			NSLog(@"[VFL] 串口退化为 virtio-console，固件阶段可能没有控制台");
+		}
+	}
+	configuration.serialPorts = serialPort != nil ? @[ serialPort ] : @[];
 
 	NSMutableArray *storage = [NSMutableArray array];
 	NSArray<NSNumber *> *readOnly = definition.readOnlyDisks;

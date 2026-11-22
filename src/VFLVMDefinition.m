@@ -109,7 +109,8 @@ NSString *VFLSocketPath(void) {
 	if (self.commandLine.length > 0) {
 		return self.commandLine;
 	}
-	return @"console=hvc0 console=ttyAMA0 loglevel=7 panic=1";
+	// PL011（ttyAMA0）与 virtio-console（hvc0）都带上，串口硬件换哪种都能出日志。
+	return @"console=ttyAMA0,115200 console=hvc0 loglevel=7 panic=1";
 }
 
 @end
