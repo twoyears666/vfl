@@ -20,6 +20,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)start;
 - (nullable VFLMachineSession *)sessionNamed:(NSString *)name;
+/// 是否有虚拟机正在启动 / 运行 / 关机。
+- (BOOL)hasActiveSession;
 
 @end
 
