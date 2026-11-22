@@ -24,6 +24,15 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 	return @"unknown";
 }
 
+/// VZGenericMachineIdentifier 在 iOS SDK 里没有公开声明，这里显式声明用到的选择器。
+@protocol VFLGenericMachineIdentifierProtocol <NSObject>
+- (NSData *)dataRepresentation;
+@end
+
+@protocol VFLGenericMachineIdentifierClassProtocol <NSObject>
+- (id<VFLGenericMachineIdentifierProtocol>)initWithDataRepresentation:(NSData *)data;
+@end
+
 @implementation VFLMachineSession {
 	VZVirtualMachine *_machine;
 	NSFileHandle *_consoleReader;
@@ -270,9 +279,10 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 												attributes:nil
 													 error:NULL];
 		NSData *savedData = [NSData dataWithContentsOfFile:identifierPath];
-		id identifier = nil;
+		id<VFLGenericMachineIdentifierProtocol> identifier = nil;
 		if (savedData.length > 0) {
-			identifier = [[identifierClass alloc] initWithDataRepresentation:savedData];
+			id<VFLGenericMachineIdentifierClassProtocol> identifierClassObject = (id)identifierClass;
+			identifier = [identifierClassObject initWithDataRepresentation:savedData];
 		}
 		if (identifier == nil) {
 			identifier = [[identifierClass alloc] init];
