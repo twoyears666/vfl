@@ -27,10 +27,7 @@ NSString *VFLMachineStateText(VFLMachineState state) {
 /// VZGenericMachineIdentifier 在 iOS SDK 里没有公开声明，这里显式声明用到的选择器。
 @protocol VFLGenericMachineIdentifierProtocol <NSObject>
 - (NSData *)dataRepresentation;
-@end
-
-@protocol VFLGenericMachineIdentifierClassProtocol <NSObject>
-- (id<VFLGenericMachineIdentifierProtocol>)initWithDataRepresentation:(NSData *)data;
+- (instancetype)initWithDataRepresentation:(NSData *)data;
 @end
 
 @implementation VFLMachineSession {
@@ -281,9 +278,8 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 		NSData *savedData = [NSData dataWithContentsOfFile:identifierPath];
 		id<VFLGenericMachineIdentifierProtocol> identifier = nil;
 		if (savedData.length > 0) {
-			id<VFLGenericMachineIdentifierClassProtocol> identifierClassObject = (id)identifierClass;
-			identifier = (id<VFLGenericMachineIdentifierProtocol>)
-				[identifierClassObject initWithDataRepresentation:savedData];
+			id<VFLGenericMachineIdentifierProtocol> allocated = [identifierClass alloc];
+			identifier = [allocated initWithDataRepresentation:savedData];
 		}
 		if (identifier == nil) {
 			identifier = [[identifierClass alloc] init];

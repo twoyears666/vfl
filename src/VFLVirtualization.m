@@ -93,8 +93,15 @@ static void VFLRebindVirtualization(void *hookHandle, NSMutableArray<NSString *>
 }
 
 /// 把 hook 写死的 /tmp 日志改成指向 Media 下的同名文件。
+/// 上一次运行的日志先留一份 .prev，App 重启后还能回看。
 static void VFLPointLogAtMedia(const char *tmpPath, NSString *destination) {
-	[[NSFileManager defaultManager] createFileAtPath:destination contents:nil attributes:nil];
+	NSFileManager *manager = [NSFileManager defaultManager];
+	NSString *previous = [destination stringByAppendingPathExtension:@"prev"];
+	[manager removeItemAtPath:previous error:NULL];
+	if ([manager fileExistsAtPath:destination]) {
+		[manager moveItemAtPath:destination toPath:previous error:NULL];
+	}
+	[manager createFileAtPath:destination contents:nil attributes:nil];
 	unlink(tmpPath);
 	if (symlink(destination.fileSystemRepresentation, tmpPath) != 0) {
 		NSLog(@"[VFL] 无法把 %s 链接到 %@", tmpPath, destination);
