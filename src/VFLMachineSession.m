@@ -282,7 +282,8 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 		id<VFLGenericMachineIdentifierProtocol> identifier = nil;
 		if (savedData.length > 0) {
 			id<VFLGenericMachineIdentifierClassProtocol> identifierClassObject = (id)identifierClass;
-			identifier = [identifierClassObject initWithDataRepresentation:savedData];
+			identifier = (id<VFLGenericMachineIdentifierProtocol>)
+				[identifierClassObject initWithDataRepresentation:savedData];
 		}
 		if (identifier == nil) {
 			identifier = [[identifierClass alloc] init];
