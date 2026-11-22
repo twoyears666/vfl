@@ -257,6 +257,34 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 	configuration.CPUCount = MAX((NSUInteger)1, definition.cpuCount);
 	configuration.memorySize = MAX((unsigned long long)512, definition.memoryMB) * 1024ULL * 1024ULL;
 
+	// Linux 客机必须显式给通用平台。不给的话 VZ 按默认（macOS 风格）设备布局配，
+	// 固件去 0x20000000（PCIe ECAM）会扑空，然后死在异常向量里。
+	Class platformClass = NSClassFromString(@"VZGenericPlatformConfiguration");
+	Class identifierClass = NSClassFromString(@"VZGenericMachineIdentifier");
+	if (platformClass != Nil && identifierClass != Nil) {
+		id platform = [[platformClass alloc] init];
+		NSString *identifierPath =
+			[definition.efiVariableStorePath stringByAppendingPathExtension:@"machineid"];
+		[NSFileManager.defaultManager createDirectoryAtPath:[identifierPath stringByDeletingLastPathComponent]
+							   withIntermediateDirectories:YES
+												attributes:nil
+													 error:NULL];
+		NSData *savedData = [NSData dataWithContentsOfFile:identifierPath];
+		id identifier = nil;
+		if (savedData.length > 0) {
+			identifier = [[identifierClass alloc] initWithDataRepresentation:savedData];
+		}
+		if (identifier == nil) {
+			identifier = [[identifierClass alloc] init];
+			[[identifier dataRepresentation] writeToFile:identifierPath atomically:YES];
+		}
+		[platform setValue:identifier forKey:@"machineIdentifier"];
+		[configuration setValue:platform forKey:@"platform"];
+		NSLog(@"[VFL] 通用平台已配置，机器标识：%@", identifierPath);
+	} else {
+		NSLog(@"[VFL] 找不到 VZGenericPlatformConfiguration，平台配置会被跳过");
+	}
+
 	// EFI 模式由固件自己找 ISO / 系统盘上的 EFI 引导器：安装阶段从 ISO 起，
 	// 装完删掉 ISO 后直接从系统盘起，不需要 host 上有内核文件。
 	id bootLoader = nil;
