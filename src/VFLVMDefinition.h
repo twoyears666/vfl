@@ -49,6 +49,9 @@ typedef NS_ENUM(NSInteger, VFLBootMode) {
 @property (nonatomic, assign) VFLBootMode bootMode;
 /// EFI NVRAM 文件路径（按虚拟机名派生，跨启动保留引导项）。
 @property (nonatomic, readonly, copy) NSString *efiVariableStorePath;
+/// 指定用哪个 EFI 固件（VZG21.fd / VZG11.fd）。留空表示按默认顺序挑第一个存在的。
+/// 固件换代常伴随设备树差异，能换一版试是排查 EFI 起不来的最省事手段。
+@property (nonatomic, copy, nullable) NSString *efiFirmwareName;
 
 + (instancetype)definitionWithDictionary:(NSDictionary *)dictionary;
 - (NSDictionary *)dictionaryRepresentation;

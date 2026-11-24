@@ -120,7 +120,16 @@ typedef NS_ENUM(NSInteger, VZVirtualMachineState) {
 /// 运行时加载 Virtualization.framework 并确认必需类都在。返回 NO 时 diagnostic 说明缺了什么。
 BOOL VFLVirtualizationPrepare(NSString *_Nullable *_Nullable diagnostic);
 
-/// App 自带的 EFI 固件（VZG21.fd）。VMM 默认去 /System 下找，iPad 上没有，需要显式喂给它。
+/// App 自带的 EFI 固件（VZG21.fd / VZG11.fd）。VMM 默认去 /System 下找，
+/// iPad 上没有，需要显式喂给它。按 VZG21 → VZG11 的顺序取第一个存在的。
 NSURL *_Nullable VFLVirtualizationEFIROMURL(void);
+
+/// 同上，但只认指定的文件名；传 nil 等价于 VFLVirtualizationEFIROMURL()。
+NSURL *_Nullable VFLVirtualizationEFIROMURLWithName(NSString *_Nullable name);
+
+/// VZ 用来区分客户机类型的常量（框架导出为 VZVirtualMachineGuestTypeLinux）。
+/// 不显式设成 Linux 时，VZ 会按 macOS 客户机铺设备树，固件去 0x20000000
+/// 读 PCIe ECAM 就会扑空、卡死在轮询里。取不到符号时退回字面量 @"Linux"。
+NSString *VFLVirtualMachineGuestTypeLinux(void);
 
 NS_ASSUME_NONNULL_END

@@ -77,11 +77,12 @@ NSString *VFLSocketPath(void) {
 	// 旧定义没有 bootMode，按内核直启处理，避免升级后老虚拟机突然走 EFI。
 	definition.bootMode = [dictionary[@"bootMode"] isEqualToString:@"efi"]
 		? VFLBootModeEFI : VFLBootModeKernel;
+	definition.efiFirmwareName = dictionary[@"efiFirmware"];
 	return definition;
 }
 
 - (NSDictionary *)dictionaryRepresentation {
-	return @{
+	NSMutableDictionary *dictionary = [@{
 		@"name": self.name ?: @"linux",
 		@"kernel": self.kernelPath ?: @"",
 		@"initrd": self.initrdPath ?: @"",
@@ -96,7 +97,11 @@ NSString *VFLSocketPath(void) {
 		@"displays": @(self.displayCount),
 		@"firstBoot": @(self.firstBoot),
 		@"bootMode": self.bootMode == VFLBootModeKernel ? @"kernel" : @"efi",
-	};
+	} mutableCopy];
+	if (self.efiFirmwareName.length > 0) {
+		dictionary[@"efiFirmware"] = self.efiFirmwareName;
+	}
+	return dictionary;
 }
 
 - (NSString *)efiVariableStorePath {

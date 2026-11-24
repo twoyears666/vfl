@@ -108,13 +108,59 @@ static void VFLPointLogAtMedia(const char *tmpPath, NSString *destination) {
 	}
 }
 
+/// 固件不是只有一种。VZ 每个大版本会换 ROM：
+///   VZG21.fd —— macOS 13 / iOS 16 这一代，4MB，配套的 VMM 也是 13.2 的；
+///   VZG11.fd —— 上一代，1MB 或 4MB 视来源而定。
+/// 早期 EFI 起不来时，换一版固件往往就能绕过某个设备树差异，所以按顺序都试一遍。
+static NSArray<NSString *> *VFLFirmwareNames(void) {
+	return @[ @"VZG21.fd", @"VZG11.fd" ];
+}
+
 NSURL *VFLVirtualizationEFIROMURL(void) {
-	NSString *path = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:
-		@"Frameworks/Virtualization.framework/Versions/A/Resources/VZG21.fd"];
-	if (![NSFileManager.defaultManager fileExistsAtPath:path]) {
-		return nil;
+	return VFLVirtualizationEFIROMURLWithName(nil);
+}
+
+NSURL *VFLVirtualizationEFIROMURLWithName(NSString *name) {
+	NSString *resources = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:
+		@"Frameworks/Virtualization.framework/Versions/A/Resources"];
+	NSFileManager *manager = NSFileManager.defaultManager;
+	NSMutableArray<NSString *> *candidates = [NSMutableArray array];
+	if (name.length > 0) {
+		[candidates addObject:name];
+	} else {
+		[candidates addObjectsFromArray:VFLFirmwareNames()];
 	}
-	return [NSURL fileURLWithPath:path];
+	for (NSString *candidate in candidates) {
+		NSString *path = [resources stringByAppendingPathComponent:candidate];
+		NSDictionary *attributes = [manager attributesOfItemAtPath:path error:NULL];
+		if (attributes == nil) {
+			continue;
+		}
+		NSLog(@"[VFL] 使用 EFI 固件 %@（%llu 字节）", candidate,
+			  attributes.fileSize);
+		return [NSURL fileURLWithPath:path];
+	}
+	NSLog(@"[VFL] %@ 下没有任何 EFI 固件（找过 %@）", resources,
+		  [candidates componentsJoinedByString:@", "]);
+	return nil;
+}
+
+NSString *VFLVirtualMachineGuestTypeLinux(void) {
+	// 框架把它导出成数据符号 __VZVirtualMachineGuestTypeLinux（dlsym 去掉下划线），
+	// 指到一个 NSString *。取不到就用字面量，语义上等价。
+	static NSString *cached = nil;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		NSString *const *slot = (NSString *const *)dlsym(RTLD_DEFAULT, "VZVirtualMachineGuestTypeLinux");
+		if (slot != NULL && *slot != nil) {
+			cached = *slot;
+			NSLog(@"[VFL] 客户机类型常量取自框架：%@", cached);
+		} else {
+			cached = @"Linux";
+			NSLog(@"[VFL] 框架没导出客户机类型常量，退回字面量 %@", cached);
+		}
+	});
+	return cached;
 }
 
 BOOL VFLVirtualizationPrepare(NSString **diagnostic) {
@@ -150,7 +196,11 @@ BOOL VFLVirtualizationPrepare(NSString **diagnostic) {
 			setenv("VZ_INSTALLATION_BIN", installationBinary.fileSystemRepresentation, 1);
 		}
 		// VMOI 用这几个环境变量绕开 VMM 工厂初始化竞态，并把子进程日志留在设备上。
-		setenv("VMM_FACTORY_SETTLE_USEC", "100000", 1);
+		// settle 时间必须是 2s：VMM 工厂给每个设备建完节点后会整进程停下，
+		// hook 负责定时 SIGCONT 放行。给太短（100ms）设备还没序列化完就被放行，
+		// 固件拿到的设备树是残缺的 —— 表现为固件去 0x20000000 读 PCIe ECAM 扑空、
+		// 卡在轮询里再也起不来。参考实现用的是 2000000，这里保持一致。
+		setenv("VMM_FACTORY_SETTLE_USEC", "2000000", 1);
 		setenv("VZ_DEBUG_LOGGING", "1", 1);
 		NSString *vmmStderr = [VFLDataDirectory() stringByAppendingPathComponent:@"vmm.stderr.log"];
 		setenv("VZ_VMM_STDERR_LOG", vmmStderr.fileSystemRepresentation, 1);

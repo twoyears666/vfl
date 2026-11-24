@@ -318,6 +318,25 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 			[[identifier dataRepresentation] writeToFile:identifierPath atomically:YES];
 		}
 		[platform setValue:identifier forKey:@"machineIdentifier"];
+		// 属性名是 _guestType（带自定义 setter setGuestType:），KVC 的 guestType 键走不通，
+		// 直接发消息。不设的话 VZ 按 macOS 客户机铺设备树（ECAM 落在 0x40000000），
+		// 而固件只会去 0x20000000 轮询，启动必然卡死。
+		SEL guestTypeSelector = NSSelectorFromString(@"setGuestType:");
+		if ([platform respondsToSelector:guestTypeSelector]) {
+			typedef void (*VFLSetGuestTypeFunction)(id, SEL, NSString *);
+			VFLSetGuestTypeFunction setGuestType =
+				(VFLSetGuestTypeFunction)[platform methodForSelector:guestTypeSelector];
+			NSString *guestType = VFLVirtualMachineGuestTypeLinux();
+			// 框架对非法值会抛异常（"The guest type is invalid"），别让启动整条挂掉。
+			@try {
+				setGuestType(platform, guestTypeSelector, guestType);
+				NSLog(@"[VFL] 客户机类型已设为 %@", guestType);
+			} @catch (NSException *exception) {
+				NSLog(@"[VFL] 客户机类型 %@ 被拒（%@），按默认类型继续", guestType, exception.reason);
+			}
+		} else {
+			NSLog(@"[VFL] 这个 VZGenericPlatformConfiguration 没有 setGuestType:，按默认客户机类型继续");
+		}
 		[configuration setValue:platform forKey:@"platform"];
 		NSLog(@"[VFL] 通用平台已配置，机器标识：%@", identifierPath);
 	} else {
@@ -369,7 +388,7 @@ static NSString *VFLLogTail(NSString *path, NSUInteger limit) {
 		// VMM 里 EFI 固件路径写死成 /System/.../Virtualization.framework/.../VZG21.fd，
 		// iPad 上没有这个文件（日志里的 FATAL: Failed to open EFI ROM）。
 		// VZEFIBootLoader 有私有 _ROMImageURL，塞进去后框架会把它当 fd 传给 VMM。
-		NSURL *romURL = VFLVirtualizationEFIROMURL();
+		NSURL *romURL = VFLVirtualizationEFIROMURLWithName(definition.efiFirmwareName);
 		SEL romSelector = NSSelectorFromString(@"_setROMImageURL:");
 		if (romURL != nil && [efiLoader respondsToSelector:romSelector]) {
 			typedef void (*VFLSetROMFunction)(id, SEL, NSURL *);
