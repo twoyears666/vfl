@@ -146,16 +146,21 @@ NSURL *VFLVirtualizationEFIROMURLWithName(NSString *name) {
 }
 
 NSString *VFLVirtualMachineGuestTypeLinux(void) {
-	// 框架把它导出成数据符号 __VZVirtualMachineGuestTypeLinux（dlsym 去掉下划线），
-	// 指到一个 NSString *。取不到就用字面量，语义上等价。
+	// 框架把它导出成数据符号，符号表里写作 __VZVirtualMachineGuestTypeLinux。
+	// dlsym 要的名字比符号表少一个前导下划线（实测 nm 的 ___error 对应
+	// dlsym 的 __error），所以先试 _VZ… 再试 VZ…，两个都不中才退回字面量。
 	static NSString *cached = nil;
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
-		NSString *const *slot = (NSString *const *)dlsym(RTLD_DEFAULT, "VZVirtualMachineGuestTypeLinux");
-		if (slot != NULL && *slot != nil) {
-			cached = *slot;
-			NSLog(@"[VFL] 客户机类型常量取自框架：%@", cached);
-		} else {
+		const char *names[] = { "_VZVirtualMachineGuestTypeLinux", "VZVirtualMachineGuestTypeLinux" };
+		for (size_t i = 0; i < sizeof(names) / sizeof(names[0]) && cached == nil; i++) {
+			NSString *const *slot = (NSString *const *)dlsym(RTLD_DEFAULT, names[i]);
+			if (slot != NULL && *slot != nil) {
+				cached = *slot;
+				NSLog(@"[VFL] 客户机类型常量取自框架（%s）：%@", names[i], cached);
+			}
+		}
+		if (cached == nil) {
 			cached = @"Linux";
 			NSLog(@"[VFL] 框架没导出客户机类型常量，退回字面量 %@", cached);
 		}
